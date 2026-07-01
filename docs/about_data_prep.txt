@@ -13,3 +13,5 @@ These features are common across many types of images, including medical images.
 Therefore, instead of learning these basic features from scratch, 
 we reuse the pretrained feature extractor and only retrain the final classification layer 
 to recognize brain tumor classes.
+
+EfficientNet B0 has 5.3 Million Parameters
