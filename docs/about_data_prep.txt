@@ -6,4 +6,10 @@ fewer weight updates per epoch. A batch size of 32 allows efficient GPU utilizat
 stable gradient estimates.
 
 Why EfficientNet will perform well on MRI images:
-Although EfficientNet was trained on the ImageNet dataset rather than MRI images, its early and intermediate layers learn general visual features such as edges, contours, textures, and shapes. These features are common across many types of images, including medical images. Therefore, instead of learning these basic features from scratch, we reuse the pretrained feature extractor and only retrain the final classification layer to recognize brain tumor classes.
+Although EfficientNet was trained on the ImageNet dataset rather than MRI images, 
+its early and intermediate layers learn general visual features such as edges, contours, 
+textures, and shapes. 
+These features are common across many types of images, including medical images. 
+Therefore, instead of learning these basic features from scratch, 
+we reuse the pretrained feature extractor and only retrain the final classification layer 
+to recognize brain tumor classes.
