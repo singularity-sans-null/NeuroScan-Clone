@@ -67,3 +67,4 @@ LAST_MODEL_NAME = "efficientnet_brain_tumor_last.pth"
 
 # Random Seed
 RANDOM_SEED = 42
+
