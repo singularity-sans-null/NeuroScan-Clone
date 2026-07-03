@@ -4,3 +4,4 @@ saved_models/efficientnet_brain_tumor_last.pth
 src/__pycache__/
 src/package-lock.json
 streamlit_app/
+classifier/__pycache__
