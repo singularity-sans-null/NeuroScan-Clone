@@ -6,7 +6,7 @@ from torchvision.models import (
     efficientnet_b0, 
     EfficientNet_B0_Weights
     )
-import config
+from classifier import config
 
 def freeze_feature_extractor(model):
     """

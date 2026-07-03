@@ -8,7 +8,7 @@ import random
 from pathlib import Path
 import numpy as np
 import torch
-import config
+from classifier import config
 
 
 def set_seed(seed= config.RANDOM_SEED):

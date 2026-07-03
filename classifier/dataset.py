@@ -2,7 +2,7 @@ from pathlib import Path
 from torchvision.datasets import ImageFolder
 from torchvision import transforms
 from torch.utils.data import DataLoader
-import config
+from classifier import config
 
 # This function does the Image transformation
 def get_transforms():

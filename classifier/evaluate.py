@@ -9,10 +9,10 @@ from sklearn.metrics import(
     classification_report
 )
 
-import config
-from dataset import get_data
-from model import create_model
-from utils import load_checkpoint
+from classifier import config
+from classifier.dataset import get_data
+from classifier.model import create_model
+from classifier.utils import load_checkpoint
 
 
 # Evaluation Function

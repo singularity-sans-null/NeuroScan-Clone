@@ -9,10 +9,10 @@ import torch
 import torch.nn as nn
 import torch.optim as optim
 
-import config
-from dataset import get_data
-from model import create_model
-from utils import (
+from classifier import config
+from classifier.dataset import get_data
+from classifier.model import create_model
+from classifier.utils import (
     set_seed,
     save_checkpoint,
     calculate_accuracy,
