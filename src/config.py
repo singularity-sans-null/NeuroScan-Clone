@@ -21,12 +21,12 @@ TRAIN_DIR = DATASET_DIR / "Training"
 TEST_DIR = DATASET_DIR / "Testing"
  
  # Saved Models
-MODEL_SAVE_DIR = PROJECT_ROOT / "svaed_models"
+MODEL_SAVE_DIR = PROJECT_ROOT / "saved_models"
 
 # Device Selection
 
 DEVICE = torch.device(
-    "cuda" if torch.cuda.is_available else "cpu"
+    "cuda" if torch.cuda.is_available() else "cpu"
 )
 
 # Image Parameters
