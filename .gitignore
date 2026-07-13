@@ -3,5 +3,6 @@ dataset/
 saved_models/efficientnet_brain_tumor_last.pth
 src/__pycache__/
 src/package-lock.json
-streamlit_app/
+# streamlit_app/
 classifier/__pycache__/
+seg_dataset/
