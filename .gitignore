@@ -6,3 +6,4 @@ src/package-lock.json
 # streamlit_app/
 classifier/__pycache__/
 seg_dataset/
+segmentation/__pycache__/
