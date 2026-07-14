@@ -151,8 +151,6 @@ class BrainTumorSegmentationDataset(Dataset):
             
             image = transformed["image"]
             mask = transformed["mask"]
-        print(type(image))
-        print(type(mask))
         mask = mask.unsqueeze(0)
 
         return image, mask

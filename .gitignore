@@ -7,3 +7,5 @@ src/package-lock.json
 classifier/__pycache__/
 seg_dataset/
 segmentation/__pycache__/
+saved_models/best_unet.pth
+saved_models/last_undet.pth
