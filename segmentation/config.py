@@ -34,7 +34,7 @@ MODEL_SAVE_DIR.mkdir(
 
 BEST_MODEL_NAME = "best_unet.pth"
 
-LAST_MODEL_NAME = "last_undet.pth"
+LAST_MODEL_NAME = "last_unet.pth"
 
 
 # OUtput Directory

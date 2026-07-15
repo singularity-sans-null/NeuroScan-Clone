@@ -6,7 +6,7 @@ AI-Powered Brain Tumor Classification System
 """
 from pathlib import Path
 import sys
-
+import base64
 # Add the project root to Python's module search path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -24,11 +24,15 @@ from classifier.gradcam import GradCAMGenerator
 from classifier.model import create_model
 from classifier.utils import load_checkpoint
 
+def get_base64(image_path):
+    with open(image_path, "rb") as f:
+        return base64.b64encode(f.read()).decode()
 
+logo = get_base64("streamlit_app/android-chrome-512x512.png")
 # Page Config
 st.set_page_config(
     page_title="Aescanus - NeuroScan",
-    page_icon="🧠",
+    page_icon= f"streamlit_app/android-chrome-512x512.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -165,8 +169,7 @@ It is **NOT** a substitute for professional medical diagnosis.
 
 
 # Page Header
-st.markdown(
-    '<p class="main-title">🧠 NeuroScan</p>',
+st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
     unsafe_allow_html=True,
 )
 
