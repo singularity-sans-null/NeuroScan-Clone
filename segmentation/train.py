@@ -67,46 +67,50 @@ def dice_coefficient(
 # Dice loss
 
 class DiceLoss(nn.Module):
-    """Dice loss for binary segmentation"""
-    def __init__(self, smooth = 1e-6):
+    """
+    Dice Loss for Binary Segmentation.
+    """
+    def __init__(self, smooth=1e-6):
         super().__init__()
-        self.smooth= smooth
-    
+        self.smooth = smooth
     def forward(self, predictions, targets):
-        predicitions = torch.sigmoid(predictions)
-        predicitions = predicitions.view(-1)
-        
+        predictions = torch.sigmoid(predictions)
+        predictions = predictions.view(-1)
         targets = targets.view(-1)
-        
-        intersection = (
-            predicitions * targets
-        ).sum()
-        
+        intersection = (predictions * targets).sum()
         dice = (
-            2* intersection + self.smooth
-            ) / (predictions.sum() + targets.sum()  + self.smooth)
-        
-        return 1- dice
-    
-    
+            2 * intersection + self.smooth
+        ) / (
+            predictions.sum()
+            + targets.sum()
+            + self.smooth
+        )
+        return 1 - dice
 # combined BCE + DIce loss
 
 class CombinedLoss(nn.Module):
     """
-    BCEWithLogitsLoss + Dice Loss
+    combined loss
+    ------------
     """
-    
     def __init__(self):
         super().__init__()
-        
         self.bce = nn.BCEWithLogitsLoss()
         self.dice = DiceLoss()
-        
     def forward(self, predictions, targets):
-        bce_loss = self.bce(predictions, targets)
-        dice_loss = self.dice(predictions, targets)
-        total_loss = (config.BCE_WEIGHT  + dice_loss)
-        
+        bce_loss = self.bce(
+            predictions,
+            targets
+        )
+        dice_loss = self.dice(
+            predictions,
+            targets
+        )
+        total_loss = (
+            config.BCE_WEIGHT * bce_loss
+            +
+            config.DICE_WEIGHT * dice_loss
+        )
         return total_loss
     
     
@@ -390,7 +394,7 @@ def fit(
                 config.BEST_MODEL_NAME
             )
             
-            print(f"New Best Dice: {best_dice}:.4f")
+            print(f"New Best Dice: {best_dice:.4f}")
         
         else:
             patience_counter += 1
