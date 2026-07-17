@@ -10,20 +10,20 @@ The project was developed as an academic prototype to demonstrate the applicatio
 
 ## Features
 
-* - Brain MRI Tumor Classification
-* - Four-Class Tumor Detection
+* Brain MRI Tumor Classification
+*  Four-Class Tumor Detection
 
   * Glioma
   * Meningioma
   * Pituitary Tumor
   * No Tumor
-* - Prediction Confidence Scores
-* - Grad-CAM Explainability
-* - U-Net Tumor Segmentation
-* - Tumor Mask Visualization
-* - Interactive Streamlit Web Interface
-* - GPU (CUDA) Support
-* - CPU Compatibility
+*  Prediction Confidence Scores
+*  Grad-CAM Explainability
+*  U-Net Tumor Segmentation
+*  Tumor Mask Visualization
+*  Interactive Streamlit Web Interface
+*  GPU (CUDA) Support
+*  CPU Compatibility
 
 ---
 
