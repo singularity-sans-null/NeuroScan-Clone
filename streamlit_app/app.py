@@ -11,24 +11,42 @@ import base64
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
-
+import tempfile
+import cv2
+from pdf_report import create_pdf_report
 
 import numpy as np
 import torch
 import streamlit as st
 from PIL import Image
-
+import albumentations as A
+from albumentations.pytorch import ToTensorV2
 import classifier.config
 from classifier.dataset import get_transforms
 from classifier.gradcam import GradCAMGenerator
 from classifier.model import create_model
 from classifier.utils import load_checkpoint
+import segmentation.config as seg_config
+from segmentation.model import create_model as create_unet
+
+from segmentation.dataset import (
+    get_val_transform
+)
+from segmentation.train import (
+    load_model as load_unet_model
+)
+
+temp_dir = Path(tempfile.gettempdir()) / "neuroscan"
+temp_dir.mkdir(
+    exist_ok=True
+)
 
 def get_base64(image_path):
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
 logo = get_base64("assets/logo.png")
+logo_path = "assets/logo.png"
 # Page Config
 st.set_page_config(
     page_title="Aescanus - NeuroScan",
@@ -95,14 +113,39 @@ def load_model():
     return model
 
 
+@st.cache_resource
+def load_segmentation_model():
+    """
+    Load the U-Net model.
+    """
+    
+    model = create_unet()
+    model = load_unet_model(
+        model,
+        seg_config.MODEL_SAVE_DIR / seg_config.BEST_MODEL_NAME
+    )
+    model.eval()
+    return model
+
 model = load_model()
+segmentation_model = load_segmentation_model()
 
 for param in model.features[-1].parameters():
     param.requires_grad = True
     
     
 transform = get_transforms()
-
+segmentation_transform = A.Compose([
+    A.Resize(
+        seg_config.IMAGE_SIZE,
+        seg_config.IMAGE_SIZE
+    ),
+    A.Normalize(
+        mean = seg_config.MEAN,
+        std = seg_config.STD
+    ),
+    ToTensorV2()
+])
 gradcam = GradCAMGenerator(model)
 
 
@@ -227,23 +270,28 @@ image_np = np.array(
 ).astype(np.float32) / 255.0
 
 
+segmented = segmentation_transform(
+    image = np.array(image)
+)
+
+segmentation_input = (
+    segmented["image"].unsqueeze(0).to(seg_config.DEVICE)
+)
 # Display the image area
-left_col, right_col = st.columns(2)
+col1, col2, col3 = st.columns(3)
 
-with left_col:
-
+with col1:
     st.subheader("Original MRI")
-
     st.image(
         image,
-        use_container_width=True,
+        use_container_width = True
     )
 
-with right_col:
-
-    st.subheader("AI Explanation")
-
-    placeholder = st.empty()
+with col2:
+    gradcam_placeholder = st.empty()
+    
+with col3:
+    mask_placeholder = st.empty()
 
 
 st.markdown("---")
@@ -262,6 +310,56 @@ with st.spinner("Analyzing MRI..."):
             probabilities,
             dim=1
         )
+    with torch.no_grad():
+        segmentation_output = segmentation_model(
+            segmentation_input
+        )
+        segmentation_output = torch.sigmoid(
+            segmentation_output
+            )
+        predicted_mask = (
+            segmentation_output > 0.5
+        ).float()
+
+predicted_mask = (
+    predicted_mask.squeeze().cpu().numpy()
+    )
+predicted_mask = (
+    predicted_mask * 255
+).astype(np.uint8)
+
+overlay_image = np.array(
+    image.resize(
+        (
+            seg_config.IMAGE_SIZE,
+            seg_config.IMAGE_SIZE
+        )
+    )
+).astype(np.float32) / 255.0
+
+mask_bool = predicted_mask > 0
+overlay = overlay_image.copy()
+red_mask = np.zeros_like(overlay)
+
+red_mask [:, :, 0] = 1.0
+overlay_alpha = 0.45
+
+overlay[mask_bool] = (
+    (1-alpha) * overlay[mask_bool]
+    + alpha * red_mask[mask_bool]
+)
+
+overlay = np.clip(
+    overlay,
+    0,
+    1
+)
+tumor_pixels = np.count_nonzero(predicted_mask)
+total_pixels = predicted_mask.size
+
+tumor_percentage = (
+    tumor_pixels / total_pixels
+) * 100
 
 prediction_index = prediction.item()
 
@@ -281,51 +379,129 @@ heatmap = gradcam.generate(
 
 # Display Grad-CAM
 
-with right_col:
-
-    st.subheader("Grad-CAM Explanation")
-
+with gradcam_placeholder.container():
+    st.subheader("Grad-CAM")
     st.image(
         heatmap,
-        caption="Highlighted regions most influenced the prediction.",
-        use_container_width=True,
+        caption = "Regions Influencing the classifier",
+        width="content"
     )
+    
+with mask_placeholder.container():
+    st.subheader("Segmentation Mask")
+    st.image(
+        predicted_mask,
+        caption = "Predicted Tumor Region",
+        clamp = True,
+        width="content"
+    )
+    
+    st.markdown("---")
+    st.subheader("Tumor Overlay")
 
+    st.image(
+        overlay,
+        caption = "Predicted tumor region overlaid on MRI",
+        width = "stretch"
+)
+temp_dir = Path(tempfile.gettempdir()) / "neuroscan"
+temp_dir.mkdir(
+    exist_ok=True
+)
+original_path = temp_dir / "original.png"
+image.save(original_path)
+gradcam_path = temp_dir / "gradcam.png"
 
-# Prediction Section
+cv2.imwrite(
+    str(gradcam_path),
+    cv2.cvtColor(
+        heatmap,
+        cv2.COLOR_RGB2BGR
+    )
+)
 
-st.markdown("## Prediction Results")
+mask_path = temp_dir / "mask.png"
 
-metric1, metric2 = st.columns(2)
+cv2.imwrite(
+    str(mask_path),
+    predicted_mask
+)
 
-with metric1:
+overlay_uint8 = (
+    overlay * 255
+).astype(np.uint8)
+
+overlay_path = temp_dir / "overlay.png"
+cv2.imwrite(
+    str(overlay_path),
+    cv2.cvtColor(
+        overlay_uint8,
+        cv2.COLOR_RGB2BGR
+    )
+)
+pdf_buffer = create_pdf_report(
+    prediction_name=prediction_name,
+    confidence= confidence,
+    tumor_percentage=tumor_percentage,
+    tumor_pixels= tumor_pixels,
+    total_pixels=total_pixels,
+    original_image_path=str(original_path),
+    gradcam_path=str(gradcam_path),
+    mask_path = str(mask_path),
+    overlay_path = str(overlay_path),
+    logo_path=logo_path
+)
+
+st.markdown("## AI Analysis Dashboard")
+
+left_info, right_info = st.columns([1.2, 1])
+
+with left_info:
+
+    st.subheader("Classification")
 
     st.metric(
-        "Predicted Class",
+        "Predicted Tumor",
         prediction_name.title()
     )
-
-with metric2:
 
     st.metric(
         "Confidence",
         f"{confidence*100:.2f}%"
     )
+    st.progress(float(confidence))
+    if prediction_name.lower() == "notumor":
+        st.success("No Tumor Detected")
+    else:
+        st.error(f"Tumor Detected: {prediction_name.title()}")
 
+with right_info:
 
-st.progress(confidence)
+    st.subheader("Segmentation")
 
+    stat1, stat2 = st.columns(2)
 
-if prediction_name.lower() == "notumor":
+    with stat1:
+        st.metric(
+            "Tumor Area",
+            f"{tumor_percentage:.2f}%"
+        )
 
-    st.success("No Brain Tumor Detected")
+        st.metric(
+            "Tumor Pixels",
+            f"{tumor_pixels:,}"
+        )
 
-else:
+    with stat2:
+        st.metric(
+            "Image Pixels",
+            f"{total_pixels:,}"
+        )
 
-    st.error(
-        f"Tumor Detected: {prediction_name.title()}"
-    )
-
+        st.metric(
+            "Mask Size",
+            f"{predicted_mask.shape[0]}×{predicted_mask.shape[1]}"
+        )
 
 # Class Probabilities
 
@@ -429,7 +605,15 @@ with st.expander("Model Information"):
     st.write("Trained on the Brain Tumor Dataset consisting of ~5,000 MRI images. *to be replaced*")
 
 # Disclaimer
-
+st.markdown("---")
+st.subheader("Download AI Report")
+st.download_button(
+    label = "NeuroScan Report",
+    data = pdf_buffer,
+    file_name="NeuroScan_Report.pdf",
+    mime = "application/pdf",
+    use_container_width=True,
+)
 st.markdown("---")
 
 st.warning(
