@@ -139,7 +139,7 @@ class BrainTumorSegmentationDataset(Dataset):
         if mask is None:
             raise ValueError(f"Could not read mask: {mask_path}")
         
-        mask = (mask > 0).astype(np.float32)
+        mask = (mask > 128).astype(np.float32)
         
         # Augmentation part
         

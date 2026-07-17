@@ -12,7 +12,7 @@ import torch
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Dataset Directory
-DATASET_DIR = PROJECT_ROOT / "dataset"
+DATASET_DIR = PROJECT_ROOT / "dataset" / "classification"
 
 # Training Images
 TRAIN_DIR = DATASET_DIR / "Training"

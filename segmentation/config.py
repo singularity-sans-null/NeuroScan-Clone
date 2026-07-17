@@ -13,10 +13,10 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 
 # Data Directory
 
-DATA_DIR = PROJECT_ROOT / "seg_dataset"
+DATA_DIR = PROJECT_ROOT / "dataset" / "segmentation"
 
 # Training dataset
-TRAIN_DIR = DATA_DIR / "Training"
+TRAIN_DIR = DATA_DIR
 
 # Training dataset split
 TRAIN_SPLIT = 0.8

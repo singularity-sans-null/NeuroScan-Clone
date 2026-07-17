@@ -148,7 +148,7 @@ def load_checkpoint(
         map_location=config.DEVICE
     )
     
-    model.load_sate_dict(
+    model.load_state_dict(
         checkpoint["model_state_dict"]
     )
     
@@ -458,7 +458,7 @@ def main():
     
     last_checkpoint = {
         "epoch": config.NUM_EPOCHS,
-        "model_State_dict": model.state_dict(),
+        "model_state_dict": model.state_dict(),
         "optimizer_state_dict": optimizer.state_dict(),
         "scheduler_state_dict": scheduler.state_dict(),
         "history": history

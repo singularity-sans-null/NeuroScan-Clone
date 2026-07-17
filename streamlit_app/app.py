@@ -28,11 +28,11 @@ def get_base64(image_path):
     with open(image_path, "rb") as f:
         return base64.b64encode(f.read()).decode()
 
-logo = get_base64("streamlit_app/android-chrome-512x512.png")
+logo = get_base64("assets/logo.png")
 # Page Config
 st.set_page_config(
     page_title="Aescanus - NeuroScan",
-    page_icon= f"streamlit_app/android-chrome-512x512.png",
+    page_icon= f"assets/logo.png",
     layout="wide",
     initial_sidebar_state="expanded",
 )
@@ -209,7 +209,11 @@ except Exception:
 
     st.stop()
 
-
+# st.button(
+#     label="Run",
+#     on_click=
+    
+# )
 # Image preprocessing
 input_tensor = transform(image)
 
