@@ -1,7 +1,32 @@
-pytorch
-numpy
-scikit-learn
-grad-cam
-streamlit
-opencv-python
-albumentations
+# ==========================================
+
+# NeuroScan Requirements
+
+# AI-Powered Brain Tumor Classification &
+
+# Segmentation System
+
+# ==========================================
+
+# Deep Learning
+torch>=2.0.0
+torchvision>=0.15.0
+torchaudio>=2.0.0
+# Computer Vision
+opencv-python>=4.8.0
+Pillow>=10.0.0
+# Scientific Computing
+numpy>=1.24.0
+scipy>=1.11.0
+# Machine Learning
+scikit-learn>=1.3.0
+# Data Augmentation
+albumentations>=1.4.0
+# Progress Bar
+tqdm>=4.66.0
+# Data Visualizatn
+matplotlib>=3.8.0
+# Web Applicatn
+streamlit>=1.35.0
+# Grad-CAM Explainability
+grad-cam>=1.5.0

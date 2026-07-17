@@ -60,7 +60,7 @@ Unlike the classifier, which predicts only the tumor type, the U-Net predicts wh
 
 ---
 
-## 🏗 System Architecture
+## System Architecture
 
 ```text
                      Brain MRI Image
