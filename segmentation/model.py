@@ -7,6 +7,7 @@ U-Net implementation for Brain Tumor Segmentation.
 import torch
 import torch.nn as nn
 import torch.nn.functional as F
+# from segmentation import config
 import config
 
 # DOUBLE CONVOLUTION BLOCK

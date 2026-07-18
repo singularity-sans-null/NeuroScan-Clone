@@ -11,14 +11,19 @@ import torch.nn as nn
 from tqdm import tqdm
 
 import config
+# from segmentation import config
+
+# from segmentation.model import (
+#     create_model,
+#     initialize_weights
+# )
 
 from model import (
     create_model,
     initialize_weights
 )
-
+# from segmentation.dataset import create_dataloaders
 from dataset import create_dataloaders
-
 # Dice Coefficient func
 
 def dice_coefficient(
@@ -411,7 +416,22 @@ def fit(
             
             break
     return history
-        
+
+
+def load_model(model, checkpoint_path):
+    checkpoint = torch.load(
+        checkpoint_path,
+        map_location=config.DEVICE
+    )
+
+    model.load_state_dict(
+        checkpoint["model_state_dict"]
+    )
+
+    model.to(config.DEVICE)
+    model.eval()
+
+    return model
         
 def main():
     Path(config.MODEL_SAVE_DIR).mkdir(

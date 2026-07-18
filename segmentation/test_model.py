@@ -30,7 +30,7 @@ def load_model(model, checkpoint_path):
     )
 
     model.load_state_dict(
-        checkpoint["model_State_dict"]
+        checkpoint["model_state_dict"]
     )
 
     model.to(config.DEVICE)
@@ -58,7 +58,7 @@ transform = A.Compose([
 ]
 )
 
-IMAGE_PATH = r"""segmentation/enh_1841.png"""
+IMAGE_PATH = r"""segmentation/enh_209.png"""
 
 image = cv2.imread(IMAGE_PATH)
 
