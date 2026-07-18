@@ -116,8 +116,8 @@ NeuroScan/
 │ 
 │
 ├── streamlit_app/
-│   └── app.py
-│   
+│   ├── app.py
+│   ├── pdf_report.py
 │
 ├── saved_models/
 │   ├── best_classifier.pth
@@ -176,7 +176,7 @@ Files include:
 
 ### `streamlit_app/`
 
-Contains the Streamlit web application.
+Contains the Streamlit web application and professional PDF creation function.
 
 The application integrates:
 
@@ -186,6 +186,8 @@ The application integrates:
 * Grad-CAM visualization
 * Tumor segmentation
 * Final result display
+* Printable Professional PDF
+
 
 ---
 
@@ -242,6 +244,7 @@ Stores media used in the documentation, including:
 | Numerical Computing     | NumPy           |
 | Visualization           | Matplotlib      |
 | Progress Monitoring     | tqdm            |
+| PDF                     | reportlab       |
 
 # ⚙️ System Requirements
 
@@ -279,7 +282,7 @@ Although GPU acceleration significantly reduces training time, the application c
 ## Step 1 — Clone the Repository
 
 ```bash
-git clone https://github.com/<your-username>/NeuroScan.git
+git clone https://github.com/singularity-sans-null/NeuroScan.git
 ```
 
 Move into the project directory.
@@ -351,6 +354,7 @@ NeuroScan relies on the following major libraries:
 * tqdm
 * pytorch-grad-cam
 * scikit-learn
+* reportlab
 
 Additional supporting libraries are automatically installed through the `requirements.txt` file.
 
