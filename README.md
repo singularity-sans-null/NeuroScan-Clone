@@ -1,10 +1,26 @@
 # NeuroScan
 
-**AI-Powered Brain Tumor Classification, Explainability, and Segmentation System**
+## Overview
 
-NeuroScan is an end-to-end deep learning application developed for automated brain tumor analysis from Magnetic Resonance Imaging (MRI) scans. The system combines **image classification**, **visual explainability**, and **tumor segmentation** into a single easy-to-use application built with **PyTorch** and **Streamlit**.
+**NeuroScan** is an AI-powered Brain Tumor Classification, Explainability, Segmentation, and Report Generation System developed using **PyTorch** and **Streamlit**. It is an end-to-end deep learning application that assists in the analysis of brain Magnetic Resonance Imaging (MRI) scans by combining multiple artificial intelligence techniques into a single interactive platform.
 
-The project was developed as an academic prototype to demonstrate the application of Artificial Intelligence in medical image analysis. It provides clinicians, researchers, and students with an intuitive interface for analyzing brain MRI images while offering visual explanations and tumor localization to improve model interpretability.
+Unlike traditional classification systems that only predict the type of tumor, NeuroScan provides a comprehensive analysis workflow. After an MRI image is uploaded, the application automatically:
+
+- Classifies the MRI into one of four categories:
+  - Glioma
+  - Meningioma
+  - Pituitary Tumor
+  - No Tumor
+- Predicts the confidence score for each class.
+- Generates a **Grad-CAM explainability heatmap** showing the regions of the MRI that most influenced the classification decision.
+- Performs **pixel-level tumor segmentation** using a U-Net architecture to accurately localize the tumor.
+- Produces a colored overlay of the predicted tumor region on the original MRI for easier visualization.
+- Calculates useful segmentation statistics, including the estimated tumor area.
+- Generates a **professional downloadable PDF report** containing the AI predictions, confidence scores, segmentation results, visual explanations, and medical disclaimer for documentation and review.
+
+The project was developed as an academic prototype to demonstrate the practical application of Deep Learning, Computer Vision, and Explainable Artificial Intelligence (XAI) in medical image analysis. By combining classification, explainability, segmentation, and automated report generation into one application, NeuroScan aims to improve transparency, usability, and interpretability of AI-assisted medical imaging systems.
+
+The system provides an intuitive interface that can be used by students, researchers, educators, and healthcare professionals for educational, research, and demonstration purposes. Although NeuroScan is capable of performing automated MRI analysis, it is intended **solely for research and educational use** and should **not** be used as a substitute for professional clinical diagnosis.
 
 ---
 
