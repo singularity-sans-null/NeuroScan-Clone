@@ -377,6 +377,7 @@ Additional supporting libraries are automatically installed through the `require
 
 ---
 
+
 # 📂 Downloading the Model Files
 
 The repository expects trained model checkpoints inside the `saved_models` directory.
@@ -573,3 +574,72 @@ streamlit --version
 ```
 
 If all commands execute successfully without errors, NeuroScan has been installed correctly and is ready for training or inference.
+
+## Running the Project
+
+NeuroScan is organized as a Python package. Therefore, Python modules should be executed from the **project root directory** using the `-m` flag instead of running individual files directly.
+
+### Correct
+
+Run modules like this:
+
+```bash
+python -m segmentation.train
+```
+
+```bash
+python -m segmentation.dataset
+```
+
+```bash
+python -m segmentation.model
+```
+
+```bash
+python -m classifier.train
+```
+
+```bash
+python -m classifier.dataset
+```
+
+## To launch the Streamlit application:
+In the Project root run:
+
+```bash
+streamlit run streamlit_app/app.py
+```
+
+---
+
+### Incorrect
+
+Avoid running modules directly like this:
+
+```bash
+python segmentation/train.py
+```
+
+```bash
+python segmentation/dataset.py
+```
+
+```bash
+python classifier/train.py
+```
+
+Running modules directly may result in import errors such as:
+
+```
+ModuleNotFoundError: No module named 'segmentation'
+```
+
+or
+
+```
+ModuleNotFoundError: No module named 'classifier'
+```
+
+because the project uses package-based imports.
+
+Always execute modules using the `python -m` syntax from the project root.
