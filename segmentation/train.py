@@ -10,20 +10,21 @@ import torch.nn as nn
 
 from tqdm import tqdm
 
-import config
-# from segmentation import config
+# import config
+from segmentation import config
 
-# from segmentation.model import (
-#     create_model,
-#     initialize_weights
-# )
-
-from model import (
+from segmentation.model import (
     create_model,
     initialize_weights
 )
-# from segmentation.dataset import create_dataloaders
-from dataset import create_dataloaders
+
+# from model import (
+#     create_model,
+#     initialize_weights
+# )
+from segmentation.dataset import create_dataloaders
+# from dataset import create_dataloaders
+
 # Dice Coefficient func
 
 def dice_coefficient(

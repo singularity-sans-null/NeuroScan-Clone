@@ -1,5 +1,6 @@
 venv/
-dataset/
+dataset/classification
+dataset/Segmentation
 saved_models/efficientnet_brain_tumor_last.pth
 src/__pycache__/
 src/package-lock.json

@@ -306,7 +306,24 @@ Activate the environment.
 ```bash
 venv\Scripts\activate
 ```
+if this throws an UnAuthorizedAccess error
+```bash
+CategoryInfo : SecurityError... 
+```
 
+Go to your PowerShell and run:
+```bash
+Set-ExecutionPolicy -ExecutionPolicy RemoteSigned -Scope CurrentUser
+```
+when prompted type
+```bash
+Y
+```
+
+Then re Activate the environment.
+```bash
+venv\Scripts\activate
+```
 ---
 
 ### Linux / macOS
