@@ -4,10 +4,6 @@ Training pipeline for Brain tumor segmentation using U-Net
 """
 
 from pathlib import Path
-
-import torch
-import torch.nn as nn
-
 from tqdm import tqdm
 
 # import config
