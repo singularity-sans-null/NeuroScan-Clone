@@ -198,7 +198,6 @@ The model classifies MRI images into:
 - Streamlit — Interactive Web Application
 """
     )
-
     st.warning(
         """
 This application is intended **only for educational and research purposes.**
@@ -458,7 +457,7 @@ with left_info:
 
     st.metric(
         "Predicted Tumor",
-        prediction_name.replace("notumor", "no tumor").title()
+        prediction_name.title()
     )
 
     st.metric(
@@ -513,7 +512,7 @@ for class_name, probability in zip(
 ):
 
     st.write(
-        f"**{class_name.replace("notumor", "no tumor").title()}** — {probability*100:.2f}%"
+        f"**{class_name.title()}** — {probability*100:.2f}%"
     )
 
     st.progress(float(probability))

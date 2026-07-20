@@ -10,8 +10,7 @@ Unlike traditional classification systems that only predict the type of tumor, N
   - Pituitary Tumor
   - No Tumor
 - Predicts the confidence score for each class.
-- Generates a **Grad-CAM explainability heatmap** showing the regions of the MRI that most influenced the classification decision.
-- Performs **pixel-level tumor segmentation** using a U-Net architecture to accurately localize the tumor.
+- Generates a **Grad-CAM explainability heatmap** showing the rgfbvorms **pixel-level tumor segmentation** using a U-Net architecture to accurately localize the tumor.
 - Produces a colored overlay of the predicted tumor region on the original MRI for easier visualization.
 - Calculates useful segmentation statistics, including the estimated tumor area.
 - Generates a **professional downloadable PDF report** containing the AI predictions, confidence scores, segmentation results, visual explanations, and medical disclaimer for documentation and review.
@@ -215,6 +214,7 @@ Example:
 * `best_unet.pth`
 
 These files are automatically loaded by the Streamlit application during inference.
+A detailed evaluation of the model can be found in the model_assessment.txt document.
 
 ---
 
