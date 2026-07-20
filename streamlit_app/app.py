@@ -207,53 +207,7 @@ It is **NOT** a substitute for professional medical diagnosis.
     )
 
 # Page Header
-# st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
-#     unsafe_allow_html=True,
-# 
-
-st.markdown(
-    f"""
-<style>
-
-/* Default (Light Theme) */
-.logo-light {{
-    display: block;
-}}
-
-.logo-dark {{
-    display: none;
-}}
-
-/* Dark Theme */
-@media (prefers-color-scheme: dark) {{
-
-    .logo-light {{
-        display: none;
-    }}
-
-    .logo-dark {{
-        display: block;
-    }}
-}}
-
-.logo-container {{
-    text-align:center;
-}}
-
-</style>
-
-<div class="logo-container">
-
-<img class="logo-light"
-     src="data:image/png;base64,{logo}"
-     width="180">
-
-<img class="logo-dark"
-     src="data:image/png;base64,{dark_logo}"
-     width="180">
-
-</div>
-""",
+st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
     unsafe_allow_html=True,
 )
 
