@@ -15,6 +15,10 @@ import tempfile
 import cv2
 from pdf_report import create_pdf_report
 
+import io
+import zipfile
+import pandas as pd
+
 import numpy as np
 import torch
 import streamlit as st
@@ -198,10 +202,6 @@ The model classifies MRI images into:
 """
     )
 
-    st.success(
-        "Electrical & Electronics Engineering Final Year Project"
-    )
-
     st.warning(
         """
 This application is intended **only for educational and research purposes.**
@@ -229,6 +229,7 @@ st.markdown("---")
 uploaded_file = st.file_uploader(
     "📂 Upload a Brain MRI Image",
     type=["jpg", "jpeg", "png"],
+    accept_multiple_files=True
 )
 
 # Wait for user to upload a file
@@ -239,6 +240,10 @@ if uploaded_file is None:
     )
 
     st.stop()
+
+# Initialize storage for batch metrics and PDFs
+batch_results = []
+pdf_buffers = {}
 
 
 # Load the Image
