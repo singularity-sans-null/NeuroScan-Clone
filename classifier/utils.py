@@ -11,6 +11,7 @@ import torch
 from classifier import config
 
 
+
 def set_seed(seed= config.RANDOM_SEED):
     """
     Set random seeds for reproducibility

@@ -462,7 +462,7 @@ with left_info:
 
     st.metric(
         "Predicted Tumor",
-        prediction_name.title()
+        prediction_name.replace("notumor", "no tumor").title()
     )
 
     st.metric(
@@ -517,7 +517,7 @@ for class_name, probability in zip(
 ):
 
     st.write(
-        f"**{class_name.title()}** — {probability*100:.2f}%"
+        f"**{class_name.replace("notumor", "no tumor").title()}** — {probability*100:.2f}%"
     )
 
     st.progress(float(probability))
