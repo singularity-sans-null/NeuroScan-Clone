@@ -188,13 +188,14 @@ The model classifies MRI images into:
 
     st.info(
         """
-### Technology
+### AI Technology Stack
 
 - Python
 - PyTorch
-- EfficientNet-B0
-- Streamlit
-- Grad-CAM
+- EfficientNet-B0 — Brain Tumor Classification
+- U-Net — Tumor Segmentation
+- Grad-CAM — Model Explainability
+- Streamlit — Interactive Web Application
 """
     )
     st.warning(
@@ -538,29 +539,38 @@ with st.expander("How NeuroScan Works"):
 
     st.markdown(
         """
-### Image Processing Pipeline
+### AI Processing Pipeline
 
-1. Upload an MRI image.
+1. Upload a brain MRI image.
 
-2. Convert the image to RGB.
+2. Convert the image to RGB format.
 
-3. Resize to **224 × 224** pixels.
+3. Resize the image to **224 × 224** pixels.
 
-4. Convert to a PyTorch tensor.
+4. Apply preprocessing and normalization.
 
-5. Normalize using ImageNet statistics.
+5. Pass the image through the **EfficientNet-B0 Classification Model**.
 
-6. Pass through the pretrained EfficientNet-B0 model.
+6. Predict the tumor class and compute confidence scores.
 
-7. Compute prediction probabilities.
+7. Generate a **Grad-CAM** heatmap highlighting the regions that influenced the classification.
 
-8. Select the class with the highest probability.
+8. Pass the same MRI image through the **U-Net Segmentation Model**.
 
-9. Generate a Grad-CAM explanation showing the regions
-   responsible for the prediction.
+9. Predict the tumor mask and localize the tumor region.
 
-10. Display the prediction, confidence score, and
-    explainability heatmap.
+10. Overlay the predicted tumor mask onto the original MRI for easier visualization.
+
+11. Display:
+   - Predicted tumor class
+   - Confidence score
+   - Class probability distribution
+   - Grad-CAM explanation
+   - Tumor segmentation mask
+   - Tumor overlay visualization
+   - Segmentation statistics
+
+12. Generate a downloadable AI analysis report summarizing the results.
 """
     )
 
