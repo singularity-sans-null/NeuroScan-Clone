@@ -46,6 +46,7 @@ def get_base64(image_path):
         return base64.b64encode(f.read()).decode()
 
 logo = get_base64("assets/logo.png")
+dark_logo = get_base64("assets/dark_mode.png")
 logo_path = "assets/logo.png"
 # Page Config
 st.set_page_config(
@@ -197,11 +198,6 @@ The model classifies MRI images into:
 - Grad-CAM
 """
     )
-
-    st.success(
-        "Electrical & Electronics Engineering Final Year Project"
-    )
-
     st.warning(
         """
 This application is intended **only for educational and research purposes.**
@@ -210,9 +206,54 @@ It is **NOT** a substitute for professional medical diagnosis.
 """
     )
 
-
 # Page Header
-st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
+# st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
+#     unsafe_allow_html=True,
+# 
+
+st.markdown(
+    f"""
+<style>
+
+/* Default (Light Theme) */
+.logo-light {{
+    display: block;
+}}
+
+.logo-dark {{
+    display: none;
+}}
+
+/* Dark Theme */
+@media (prefers-color-scheme: dark) {{
+
+    .logo-light {{
+        display: none;
+    }}
+
+    .logo-dark {{
+        display: block;
+    }}
+}}
+
+.logo-container {{
+    text-align:center;
+}}
+
+</style>
+
+<div class="logo-container">
+
+<img class="logo-light"
+     src="data:image/png;base64,{logo}"
+     width="180">
+
+<img class="logo-dark"
+     src="data:image/png;base64,{dark_logo}"
+     width="180">
+
+</div>
+""",
     unsafe_allow_html=True,
 )
 
