@@ -46,7 +46,6 @@ def get_base64(image_path):
         return base64.b64encode(f.read()).decode()
 
 logo = get_base64("assets/logo.png")
-dark_logo = get_base64("assets/dark_mode.png")
 logo_path = "assets/logo.png"
 # Page Config
 st.set_page_config(
