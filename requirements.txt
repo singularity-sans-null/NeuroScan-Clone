@@ -31,3 +31,4 @@ streamlit>=1.35.0
 # Grad-CAM Explainability
 grad-cam>=1.5.0
 reportlab
+requests

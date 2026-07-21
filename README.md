@@ -408,12 +408,19 @@ saved_models/
 # Download Pre-trained Models
 
 The trained model weights are not included in this repository due to GitHub file size limitations.
+Automatically download models:
+In the project's root directory, run
+```bash
+python -m utils.download_models
+```
+or
 
 Download the pretrained checkpoints from the links below and place them inside the `saved_models` directory.
 
 | Model             | Download              |
 | ---------------   | --------------------- |
 | Pretrained_models | **https://drive.google.com/drive/folders/1Ttthv-biPp2o81KV0p37RcEk1mTor9CM?usp=drive_link** |
+
 
 
 After downloading, your project structure should look like:
