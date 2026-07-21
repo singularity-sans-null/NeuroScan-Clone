@@ -7,6 +7,7 @@ AI-Powered Brain Tumor Classification System
 from pathlib import Path
 import sys
 import base64
+from utils.download_models import ensure_model_exists
 # Add the project root to Python's module search path
 PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
@@ -126,7 +127,7 @@ def load_segmentation_model():
     )
     model.eval()
     return model
-
+ensure_model_exists()
 model = load_model()
 segmentation_model = load_segmentation_model()
 
