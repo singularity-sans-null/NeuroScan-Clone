@@ -105,7 +105,7 @@ A video demo is in the assets folder - screenshot:
 ```text
 ├── assets/
         ├── screenshots/
-        └── demo_video.mkv
+        └── DEMO_VIDEO.mp4
 ```
 ---
 
