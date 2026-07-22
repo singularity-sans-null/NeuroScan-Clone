@@ -1,13 +1,4 @@
----
-title: NeuroScan
-emoji: 🧠
-colorFrom: blue
-colorTo: red
-sdk: streamlit
-sdk_version: "1.48.1"
-app_file: streamlit_app/app.py
-pinned: false
----
+
 # NeuroScan
 
 **NeuroScan** is an AI-powered Brain Tumor Classification, Explainability, Segmentation, and Report Generation System developed using **PyTorch** and **Streamlit**. It is an end-to-end deep learning application that assists in the analysis of brain Magnetic Resonance Imaging (MRI) scans by combining multiple artificial intelligence techniques into a single interactive platform.
