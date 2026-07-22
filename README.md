@@ -102,11 +102,11 @@ Unlike the classifier, which predicts only the tumor type, the U-Net predicts wh
 ## Video Demo
 
 A video demo is in the assets folder - screenshot:
+```text
 ├── assets/
-│   ├── screenshots/
-        ├── part_1.gif
-        ├── part_2.gif
-        └── part_3.gif
+        ├── screenshots/
+        └── demo_video.mkv
+```
 ---
 
 ## Disclaimer
