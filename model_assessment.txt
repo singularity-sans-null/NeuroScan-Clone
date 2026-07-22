@@ -1,0 +1,36 @@
+============================================================
+MODEL EVALUATION
+============================================================
+Accuracy    :92.45%
+Precision   :0.9252
+Recall      :0.9245
+F1 Score    :0.9238
+
+Classification Report
+
+              precision    recall  f1-score   support
+
+      glioma       0.95      0.84      0.89       300
+  meningioma       0.84      0.86      0.85       306
+     notumor       0.96      0.99      0.98       405
+   pituitary       0.93      0.98      0.96       300
+
+    accuracy                           0.92      1311
+   macro avg       0.92      0.92      0.92      1311
+weighted avg       0.93      0.92      0.92      1311
+
+Confusion Matrix
+
+[[252  43   0   5]
+ [ 11 263  16  16]
+ [  1   2 402   0]
+ [  0   4   1 295]]
+
+
+ Excellent detection of healthy scans: 99% recall
+ Excellent detection of Pituitary tumors: 98% recall
+ Good performance on meningioma, though it has the lowest precision(84%)
+ Glioma is the most challenging class with a recall of 84% indicating that the
+ model misses more glioma cases than other tumors
+
+ The greatest confusion is between Glioma and Meningioma

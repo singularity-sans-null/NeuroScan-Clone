@@ -1,3 +1,13 @@
+---
+title: NeuroScan
+emoji: 🧠
+colorFrom: blue
+colorTo: red
+sdk: streamlit
+sdk_version: "1.48.1"
+app_file: streamlit_app/app.py
+pinned: false
+---
 # NeuroScan
 
 **NeuroScan** is an AI-powered Brain Tumor Classification, Explainability, Segmentation, and Report Generation System developed using **PyTorch** and **Streamlit**. It is an end-to-end deep learning application that assists in the analysis of brain Magnetic Resonance Imaging (MRI) scans by combining multiple artificial intelligence techniques into a single interactive platform.
@@ -10,8 +20,7 @@ Unlike traditional classification systems that only predict the type of tumor, N
   - Pituitary Tumor
   - No Tumor
 - Predicts the confidence score for each class.
-- Generates a **Grad-CAM explainability heatmap** showing the regions of the MRI that most influenced the classification decision.
-- Performs **pixel-level tumor segmentation** using a U-Net architecture to accurately localize the tumor.
+- Generates a **Grad-CAM explainability heatmap** showing the rgfbvorms **pixel-level tumor segmentation** using a U-Net architecture to accurately localize the tumor.
 - Produces a colored overlay of the predicted tumor region on the original MRI for easier visualization.
 - Calculates useful segmentation statistics, including the estimated tumor area.
 - Generates a **professional downloadable PDF report** containing the AI predictions, confidence scores, segmentation results, visual explanations, and medical disclaimer for documentation and review.
@@ -215,6 +224,7 @@ Example:
 * `best_unet.pth`
 
 These files are automatically loaded by the Streamlit application during inference.
+A detailed evaluation of the model can be found in the model_assessment.txt document.
 
 ---
 
@@ -408,12 +418,19 @@ saved_models/
 # Download Pre-trained Models
 
 The trained model weights are not included in this repository due to GitHub file size limitations.
+Automatically download models:
+In the project's root directory, run
+```bash
+python -m utils.download_models
+```
+or
 
 Download the pretrained checkpoints from the links below and place them inside the `saved_models` directory.
 
 | Model             | Download              |
 | ---------------   | --------------------- |
 | Pretrained_models | **https://drive.google.com/drive/folders/1Ttthv-biPp2o81KV0p37RcEk1mTor9CM?usp=drive_link** |
+
 
 
 After downloading, your project structure should look like:

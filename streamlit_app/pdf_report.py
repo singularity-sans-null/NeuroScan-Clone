@@ -87,7 +87,7 @@ def create_pdf_report(
         )
     )
     data = [
-        ["Prediction", prediction_name.title()],
+        ["Prediction", prediction_name.replace("notumor", "no tumor").title()],
         ["Confidence", f"{confidence*100:.2f}%"],
         ["Tumor Area", f"{tumor_percentage:2f}%"],
         ["Tumor Pixels", f"{tumor_pixels:,}"],

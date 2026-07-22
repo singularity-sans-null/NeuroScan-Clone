@@ -9,10 +9,6 @@ from pathlib import Path
 import requests
 from tqdm import tqdm
 
-# ------------------------------------------------------------------
-# MODEL URLS
-# ------------------------------------------------------------------
-
 CLASSIFIER_URL = (
     "https://huggingface.co/Ayoola-In/Neuroscan-models/resolve/main/efficientnet_brain_tumor_best.pth"
 )

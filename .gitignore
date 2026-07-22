@@ -10,4 +10,5 @@ segmentation/__pycache__/
 saved_models/best_unet.pth
 saved_models/last_unet.pth
 streamlit_app/__pycache__
-saved_models/efficientnet_brain_tumor_best.pth
+saved_models/*.pth
+utils/__pycache__/

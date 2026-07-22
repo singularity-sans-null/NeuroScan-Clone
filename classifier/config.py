@@ -42,7 +42,7 @@ NUM_CLASSES = 4
 CLASS_NAMES = [
     "glioma",
     "meningioma",
-    "notumor",
+    "no tumor",
     "pituitary"
 ]
 
