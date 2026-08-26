@@ -129,7 +129,7 @@ def load_segmentation_model():
     model.eval()
     return model
 
-ensure_models_exist()
+# ensure_models_exist()
 model = load_model()
 segmentation_model = load_segmentation_model()
 
