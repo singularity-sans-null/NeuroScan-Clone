@@ -22,6 +22,10 @@ from reportlab.platypus import (
 )
 
 def create_pdf_report(
+    patient_id,
+    patient_age,
+    patient_sex,
+    report_date,
     prediction_name,
     confidence,
     tumor_percentage,
@@ -33,58 +37,104 @@ def create_pdf_report(
     overlay_path,
     logo_path
 ):
-    """
-    Creates a NeuroScan PDF report
-    
-    Returns
-    -------
-    BytesIO
-        PDF stored in memory.
-    """
+
     buffer = BytesIO()
-    
+
     doc = SimpleDocTemplate(
         buffer,
-        pagesize = (8.27 * inch, 11.69 * inch)
+        pagesize=(8.27 * inch, 11.69 * inch)
     )
+
     styles = getSampleStyleSheet()
+
+    heading_style = styles["Heading2"]
+    heading_style.textColor = colors.darkblue
+    heading_style.spaceBefore = 10
+    heading_style.spaceAfter = 10
+
+    subtitle_style = styles["Heading3"]
+    subtitle_style.alignment = TA_CENTER
+    subtitle_style.textColor = colors.grey
+
     story = []
+
     logo = Image(
         logo_path,
-        width = 1.1*inch,
-        height= 1.1*inch
+        width=1.1 * inch,
+        height=1.1 * inch
     )
+
     logo.hAlign = "CENTER"
+
     story.append(logo)
+
     story.append(
-        Spacer(
-            1,
-            0.15*inch
-        )
+        Spacer(1, 0.15 * inch)
     )
+
     title_style = styles["Heading1"]
     title_style.alignment = TA_CENTER
     title_style.textColor = colors.darkblue
-    
+
     story.append(
         Paragraph(
-            "<font color = '#1565c0'><b>NeuroScan AI Report</b></font>",
+            "<font color='#1565c0'><b>NeuroScan AI Report</b></font>",
             title_style
         )
     )
-    
+
     story.append(
         Paragraph(
             "Brain MRI Classification • Tumor Segmentation • Explainable AI",
-            styles["Heading3"]
+            subtitle_style
         )
     )
-    
+
     story.append(
-        Spacer(
-            1,
-            0.3 * inch
+        Spacer(1, 0.2 * inch)
+    )
+
+    # =========================
+    # PATIENT INFORMATION
+    # =========================
+
+    story.append(
+        Paragraph(
+            "Patient Information",
+            heading_style
         )
+    )
+
+    patient_info = [
+        ["Patient ID", patient_id],
+        ["Age", str(patient_age)],
+        ["Sex", patient_sex],
+        ["Scan Date", report_date.strftime("%d %B %Y")]
+    ]
+
+    patient_table = Table(
+        patient_info,
+        colWidths=[2.0 * inch, 3.8 * inch]
+    )
+
+    patient_table.setStyle(
+        TableStyle([
+            ("GRID", (0, 0), (-1, -1), 1, colors.grey),
+
+            ("BACKGROUND", (0, 0), (0, -1), colors.lightgrey),
+
+            ("FONTNAME", (0, 0), (0, -1), "Helvetica-Bold"),
+
+            ("VALIGN", (0, 0), (-1, -1), "MIDDLE"),
+
+            ("PADDING", (0, 0), (-1, -1), 8),
+        ])
+    )
+
+    story.append(patient_table)
+
+    story.append(
+        Spacer(1, 0.3 * inch)
     )
     data = [
         ["Prediction", prediction_name.replace("notumor", "no tumor").title()],
