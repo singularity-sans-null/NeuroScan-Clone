@@ -27,6 +27,9 @@ from datetime import date
 
 import cv2
 import numpy as np
+import re
+import plotly.graph_objects as go
+from skimage.measure import marching_cubes
 import torch
 import streamlit as st
 
@@ -243,6 +246,17 @@ def save_analysis_images(
         "mask_path": mask_path,
         "overlay_path": overlay_path
     }
+
+# Natural Sorting Function
+# Haven't made the test file drectory yet. Keep the code modular. 
+def natural_sort_key(filename):
+    """
+    Extracts numbers from strings for natural sequential sorting.
+    Example: 'slice_2.png' comes before 'slice_10.png'
+    """
+    return [int(text) if text.isdigit() else text.lower()
+            for text in re.split(r'(\d+)', filename)]
+
 
 # LOAD CLASSIFICATION MODEL
 
@@ -794,16 +808,13 @@ st.markdown("---")
 
 
 processing_mode = st.radio(
-
     "Select Processing Mode",
-
     [
         "Single Patient",
-        "Batch Processing"
+        "Batch Processing",
+        "3D Volumetric Processing" # Add this line
     ],
-
     horizontal=True
-
 )
 
 
@@ -1950,9 +1961,259 @@ be extracted from each filename.
             )
 
 
+ # VOLUMETRIC PROCESSING MODE
 
-# HOW NEUROSCAN WORKS
+# 3D VOLUMETRIC PROCESSING MODE
 
+elif processing_mode == "3D Volumetric Processing":
+
+    st.subheader("3D Volumetric Tumor Reconstruction")
+
+    st.info(
+        "Upload a sequence of MRI slices for a single patient. "
+        "The AI will process all slices, isolate the tumor regions, "
+        "and reconstruct them inside a translucent anatomical brain envelope."
+    )
+
+    # 3D Depth Scaling Control
+    z_aspect = st.slider(
+        "Slice Depth Spacing (Z-Axis Aspect Multiplier)",
+        min_value=1.0,
+        max_value=6.0,
+        value=3.0,
+        step=0.5,
+        help="Adjusts anatomical spacing between slices so the scan volume is not flattened."
+    )
+
+    # MULTIPLE FILE UPLOAD
+    uploaded_slices = st.file_uploader(
+        "📁 Upload MRI Sequence",
+        type=["jpg", "jpeg", "png"],
+        accept_multiple_files=True,
+        key="3d_upload"
+    )
+
+    if uploaded_slices:
+        # Step A: Sort files using the natural sorting key
+        uploaded_slices = sorted(uploaded_slices, key=lambda x: natural_sort_key(x.name))
+        
+        st.success(f"{len(uploaded_slices)} slices sorted sequentially and ready.")
+
+        if st.button("🧠 Generate Volumetric Analysis", type="primary", use_container_width=True):
+            
+            tumor_masks_2d = []
+            brain_outline_masks_2d = []
+            slice_diagnostic_records = []
+            
+            pertinent_count = 0
+            sum_probabilities = np.zeros(len(classifier.config.CLASS_NAMES))
+            sum_confidence = 0.0
+            
+            volume_tumor_pixels = 0
+            volume_total_pixels = 0
+            
+            progress_bar = st.progress(0)
+            status_text = st.empty()
+
+            # Step B: Model-Driven Processing Loop
+            for index, slice_file in enumerate(uploaded_slices):
+                status_text.info(f"Processing slice {index + 1} of {len(uploaded_slices)}: {slice_file.name}")
+                
+                try:
+                    image = Image.open(slice_file).convert("RGB")
+                    image_np = np.array(image)
+                    
+                    # Run existing analysis pipeline
+                    results = analyze_mri(image=image, patient_id="3D_Temp", alpha=0.5)
+                    
+                    pred_name = results["prediction_name"]
+                    conf = results["confidence"]
+                    t_pixels = results["tumor_pixels"]
+                    
+                    # Record diagnostic info per slice
+                    slice_diagnostic_records.append({
+                        "Filename": slice_file.name,
+                        "Prediction": pred_name.replace("notumor", "No Tumor").title(),
+                        "Confidence": conf,
+                        "Tumor Pixels": t_pixels,
+                        "Probabilities": results["probabilities"]
+                    })
+                    
+                    # Track metrics for pertinent scans
+                    if pred_name.lower() != "notumor":
+                        pertinent_count += 1
+                        sum_probabilities += results["probabilities"]
+                        sum_confidence += conf
+                    
+                    volume_tumor_pixels += t_pixels
+                    volume_total_pixels += results["total_pixels"]
+                    
+                    # Extract binary tumor mask
+                    mask = results["predicted_mask"]
+                    binary_mask = (mask > 0).astype(np.uint8)
+                    tumor_masks_2d.append(binary_mask)
+                    
+                    # Extract brain outer perimeter contour (boundary outline)
+                    gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+                    _, thresh = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
+                    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
+                    
+                    outline_mask = np.zeros_like(gray, dtype=np.uint8)
+                    if contours:
+                        # Draw exclusively the outer boundary line
+                        cv2.drawContours(outline_mask, contours, -1, color=1, thickness=2)
+                    brain_outline_masks_2d.append(outline_mask)
+
+                except Exception as error:
+                    st.error(f"Error processing {slice_file.name}: {error}")
+                    st.stop()
+                
+                progress_bar.progress((index + 1) / len(uploaded_slices))
+
+            status_text.success("Slices processed successfully! Assembling visualization...")
+            
+            # --- CALCULATE AGGREGATE PREDICTION ---
+            if pertinent_count > 0:
+                avg_probabilities = sum_probabilities / pertinent_count
+                avg_confidence = sum_confidence / pertinent_count
+                best_class_idx = np.argmax(avg_probabilities)
+                best_tumor_class = classifier.config.CLASS_NAMES[best_class_idx]
+            else:
+                best_tumor_class = "No Tumor Detected"
+                avg_confidence = 0.0
+                avg_probabilities = np.zeros(len(classifier.config.CLASS_NAMES))
+                best_class_idx = None
+                
+            overall_tumor_percentage = (volume_tumor_pixels / volume_total_pixels) * 100 if volume_total_pixels > 0 else 0
+
+            # --- AI ANALYSIS DASHBOARD ---
+            st.markdown("---")
+            st.markdown("## Volumetric AI Analysis Dashboard")
+
+            left_info, right_info = st.columns([1.2, 1])
+
+            with left_info:
+                st.subheader("Classification (Averaged Across Pertinent Slices)")
+                st.metric("Predicted Tumor", best_tumor_class.title())
+                
+                if best_tumor_class.lower() != "no tumor detected":
+                    st.metric("Average Confidence", f"{avg_confidence * 100:.2f}%")
+                    st.progress(float(avg_confidence))
+                    st.error(f"Tumor Detected: {best_tumor_class.title()}")
+                else:
+                    st.metric("Average Confidence", "N/A")
+                    st.success("No Tumor Detected in Volume")
+
+            with right_info:
+                st.subheader("Volumetric Segmentation")
+                stat1, stat2 = st.columns(2)
+                with stat1:
+                    st.metric("Overall Tumor Area", f"{overall_tumor_percentage:.2f}%")
+                    st.metric("Total Tumor Voxels", f"{volume_tumor_pixels:,}")
+                with stat2:
+                    st.metric("Total Volume Voxels", f"{volume_total_pixels:,}")
+                    st.metric("Slices Processed", f"{len(uploaded_slices)}")
+
+            # --- RANKED INFLUENTIAL SCANS ---
+            st.markdown("---")
+            st.subheader("Diagnostic Influence Ranking")
+            st.caption("Scans ranked from most influential to least influential in arriving at the overall diagnosis.")
+
+            if best_class_idx is not None:
+                # Rank slices by probability towards the diagnosed tumor class, then by tumor area
+                ranked_scans = sorted(
+                    slice_diagnostic_records,
+                    key=lambda x: (x["Probabilities"][best_class_idx], x["Tumor Pixels"]),
+                    reverse=True
+                )
+            else:
+                # Fallback ranking by confidence if no tumor was detected
+                ranked_scans = sorted(
+                    slice_diagnostic_records,
+                    key=lambda x: x["Confidence"],
+                    reverse=True
+                )
+
+            ranking_table_data = [
+                {
+                    "Rank": idx + 1,
+                    "Scan Filename": r["Filename"],
+                    "Prediction": r["Prediction"],
+                    "Confidence": f"{r['Confidence'] * 100:.2f}%",
+                    "Tumor Pixels": f"{r['Tumor Pixels']:,}"
+                }
+                for idx, r in enumerate(ranked_scans)
+            ]
+            st.dataframe(ranking_table_data, use_container_width=True, hide_index=True)
+
+            # --- 3D RENDERING ---
+            st.markdown("---")
+            st.info("Generating 3D volumetric model...")
+            
+            # Stack arrays along Z-axis (Z, Y, X)
+            tumor_volume_3d = np.stack(tumor_masks_2d, axis=0) 
+            brain_outline_3d = np.stack(brain_outline_masks_2d, axis=0)
+            
+            fig = go.Figure()
+            
+            # 1. Render Brain Boundary Envelope (Translucent Outline)
+            if np.max(brain_outline_3d) > 0:
+                try:
+                    # spacing applies Z-axis aspect ratio so boundaries spread out anatomically
+                    b_verts, b_faces, _, _ = marching_cubes(
+                        brain_outline_3d, 
+                        level=0.5, 
+                        spacing=(z_aspect, 1.0, 1.0)
+                    )
+                    fig.add_trace(go.Mesh3d(
+                        x=b_verts[:, 2],  # X (Width)
+                        y=b_verts[:, 1],  # Y (Height)
+                        z=b_verts[:, 0],  # Z (Depth/Slices)
+                        i=b_faces[:, 0], j=b_faces[:, 1], k=b_faces[:, 2],
+                        color='lightblue',
+                        opacity=0.15,     # Translucent outer boundary
+                        name='Cranial Boundary',
+                        hoverinfo='skip'
+                    ))
+                except Exception:
+                    pass
+                    
+            # 2. Render Tumor Volume Mesh
+            if np.max(tumor_volume_3d) > 0:
+                try:
+                    t_verts, t_faces, _, _ = marching_cubes(
+                        tumor_volume_3d, 
+                        level=0.5, 
+                        spacing=(z_aspect, 1.0, 1.0)
+                    )
+                    fig.add_trace(go.Mesh3d(
+                        x=t_verts[:, 2],
+                        y=t_verts[:, 1],
+                        z=t_verts[:, 0],
+                        i=t_faces[:, 0], j=t_faces[:, 1], k=t_faces[:, 2],
+                        color='crimson',
+                        opacity=0.85,
+                        name='Tumor Mass'
+                    ))
+                except Exception as e:
+                    st.error(f"Failed to extract tumor mesh: {e}")
+            
+            if len(fig.data) > 0:
+                fig.update_layout(
+                    scene=dict(
+                        xaxis_title='X (Width)', 
+                        yaxis_title='Y (Height)', 
+                        zaxis_title='Z (Slice Depth)',
+                        aspectmode='data'
+                    ),
+                    margin=dict(l=0, r=0, b=0, t=0),
+                    height=700
+                )
+                
+                st.subheader("Interactive 3D Tumor Model")
+                st.plotly_chart(fig, use_container_width=True)
+            else:
+                st.warning("No structures detected in the uploaded slices to generate a 3D model.")
 
 st.markdown("---")
 
