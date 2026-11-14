@@ -31,7 +31,7 @@ def download_model(url: str, destination: Path):
 
     if destination.exists():
 
-        print(f"✅ {destination.name} already exists.")
+        print(f"[OK] {destination.name} already exists.")
 
         return
 
@@ -75,7 +75,7 @@ def download_model(url: str, destination: Path):
                         len(chunk)
                     )
 
-    print(f"✅ Finished downloading {destination.name}")
+    print(f"[OK] Finished downloading {destination.name}")
 
 
 def ensure_models_exist():

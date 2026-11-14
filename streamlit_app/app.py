@@ -19,6 +19,7 @@ Features:
 from pathlib import Path
 import sys
 import base64
+import html
 import tempfile
 import zipfile
 
@@ -43,6 +44,7 @@ PROJECT_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PROJECT_ROOT))
 
 from pdf_report import create_pdf_report
+import ui
 
 import classifier.config
 from classifier.dataset import get_transforms
@@ -58,7 +60,7 @@ from segmentation.train import load_model as load_unet_model
 
 
 st.set_page_config(
-    page_title="Aescanus - NeuroScan",
+    page_title="NeuroScan",
     page_icon="assets/logo.png",
     layout="wide",
     initial_sidebar_state="expanded",
@@ -650,42 +652,40 @@ def analyze_mri(
 
 
 
-# PAGE DESIGN
+# UI SETUP
 
 
-st.markdown(
+ui.inject_css()
 
-    """
-    <style>
+CLASS_NAMES = classifier.config.CLASS_NAMES
 
-    .main-title {
-        text-align: center;
-        font-size: 46px;
-        font-weight: bold;
-        color: #4F8BF9;
-    }
-
-    .sub-title {
-        text-align: center;
-        font-size: 20px;
-        color: gray;
-        margin-bottom: 25px;
-    }
-
-    .footer {
-        text-align: center;
-        color: gray;
-        font-size: 14px;
-        margin-top: 30px;
-    }
-
-    </style>
-    """,
-
-    unsafe_allow_html=True
-
+DEVICE_LABEL = (
+    "GPU" if classifier.config.DEVICE.type == "cuda" else "CPU"
 )
 
+
+def is_tumor_class(name):
+    """
+    True for any tumor class. Handles 'no tumor', 'notumor', 'no_tumor'.
+    """
+    normalized = str(name).lower().replace(" ", "").replace("_", "")
+    return normalized != "notumor"
+
+
+def display_class(name):
+    return name.title() if is_tumor_class(name) else "No Tumor"
+
+
+def class_note(name):
+    notes = {
+        "glioma": "Glial-cell tumor pattern identified by the classifier.",
+        "meningioma": "Meningeal tumor pattern identified by the classifier.",
+        "pituitary": "Pituitary-region tumor pattern identified by the classifier.",
+    }
+    return notes.get(
+        str(name).lower(),
+        "Tumor pattern identified by the classifier."
+    )
 
 
 # SIDEBAR
@@ -693,1694 +693,1122 @@ st.markdown(
 
 with st.sidebar:
 
-    st.title(
-        "Aescanus - NeuroScan"
-    )
+    ui.sidebar_brand(logo)
 
-    st.markdown("---")
-
-
-    st.markdown(
-        """
-### Team Members
-
-- Adetunji Victor
-- Ayoola Marvelous
-"""
-    )
-
-
-    st.caption(
-        "NACOS UI/DATICAN Competition 2026"
-    )
-
-
-    st.markdown(
-        """
-### Brain Tumor Detection
-
-NeuroScan is an AI-powered brain tumor
-classification system built using
-**EfficientNet-B0**.
-
-The model classifies MRI images into:
-
-- Glioma
-- Meningioma
-- Pituitary Tumor
-- No Tumor
-"""
-    )
-
-
-    st.markdown("---")
-
+    ui.sidebar_label("Analysis settings")
 
     alpha = st.slider(
-
-        "Grad-CAM Intensity",
-
+        "Grad-CAM intensity",
         min_value=0.1,
-
         max_value=1.0,
-
         value=0.5,
-
-        step=0.1
-
+        step=0.1,
+        help="Opacity of the Grad-CAM heatmap blended over the MRI.",
     )
 
+    ui.sidebar_label("Model stack")
 
-    st.markdown("---")
+    ui.badges([
+        ("EfficientNet-B0", "classifier"),
+        ("U-Net", "segmentation"),
+        ("Grad-CAM", "explainability"),
+        ("PyTorch", ""),
+    ])
 
+    ui.sidebar_label("Detectable classes")
 
-    st.info(
-        """
-### AI Technology Stack
+    ui.badges([(display_class(name), "") for name in CLASS_NAMES])
 
-- Python
-- PyTorch
-- EfficientNet-B0 — Classification
-- U-Net — Tumor Segmentation
-- Grad-CAM — Explainability
-- Streamlit — Web Interface
-"""
+    ui.sidebar_label("Team")
+
+    ui.sidebar_team(
+        ["Adetunji Victor", "Ayoola Marvelous"],
+        "NACOS UI/DATICAN Competition 2026",
     )
 
+    ui.sidebar_label("Appearance")
 
-    st.warning(
-        """
-### Educational Disclaimer
+    ui.sidebar_theme_hint()
 
-This application is intended for
-educational and research purposes.
-
-It is NOT a substitute for
-professional medical diagnosis.
-"""
-    )
-
+    ui.sidebar_disclaimer()
 
 
 # PAGE HEADER
 
 
-st.markdown(f"""<p class="main-title"><img src="data:favicon-32x32.png;base64,{logo}" width="45" style="vertical-align:middle;">NeuroScan</p>""",
-    unsafe_allow_html=True,
+ui.top_bar(logo, DEVICE_LABEL)
+
+ui.hero(
+    "",
+    "Brain MRI Analysis",
+    "Tumor classification, segmentation and Grad-CAM explainability "
+    "for single scans, batches and 3D volumes.",
 )
-
-
-
-st.markdown(
-    '<p class="sub-title">'
-    'AI-Powered Brain Tumor Classification & Explainability'
-    '</p>',
-    unsafe_allow_html=True,
-)
-
-
-
-st.markdown("---")
-
 
 
 # PROCESSING MODE
 
 
-processing_mode = st.radio(
-    "Select Processing Mode",
-    [
-        "Single Patient",
-        "Batch Processing",
-        "3D Volumetric Processing" # Add this line
-    ],
-    horizontal=True
+MODE_SINGLE = "Single Patient"
+MODE_BATCH = "Batch Processing"
+MODE_VOLUME = "3D Volumetric"
+
+MODE_ICONS = {
+    MODE_SINGLE: ":material/person:",
+    MODE_BATCH: ":material/stacks:",
+    MODE_VOLUME: ":material/view_in_ar:",
+}
+
+processing_mode = st.segmented_control(
+    "Processing mode",
+    options=[MODE_SINGLE, MODE_BATCH, MODE_VOLUME],
+    default=MODE_SINGLE,
+    required=True,
+    format_func=lambda mode: f"{MODE_ICONS[mode]} {mode}",
+    label_visibility="collapsed",
+    key="processing_mode",
+    width="stretch",
 )
-
-
-st.markdown("---")
-
 
 
 # SINGLE PATIENT MODE
 
 
-if processing_mode == "Single Patient":
+def render_single_report(data):
+    """
+    Render a stored single-patient analysis.
+    """
 
+    results = data["results"]
+    patient = data["patient"]
+    prediction = results["prediction_name"]
+    tumor = is_tumor_class(prediction)
 
-    
-    # PATIENT INFORMATION
-    
-
-    st.subheader(
-        "Patient Information"
+    ui.section_header(
+        "02",
+        "Analysis report",
+        f"Patient {patient['id']} · {patient['age']} y · "
+        f"{patient['sex']} · Scan date {patient['date']}",
     )
 
+    if tumor:
+        ui.diagnosis_banner(
+            title=display_class(prediction),
+            kicker="Classification result",
+            note=class_note(prediction),
+            confidence=results["confidence"],
+            kind="danger",
+        )
+    else:
+        ui.diagnosis_banner(
+            title="No tumor detected",
+            kicker="Classification result",
+            note="The classifier found no tumor pattern in this MRI slice.",
+            confidence=results["confidence"],
+            kind="success",
+        )
 
-    patient_col1, patient_col2 = (
-        st.columns(2)
+    mask_shape = results["predicted_mask"].shape
+
+    ui.stat_cards([
+        {
+            "label": "Confidence",
+            "value": f"{results['confidence'] * 100:.2f}%",
+            "sub": "Top-class probability",
+        },
+        {
+            "label": "Tumor area",
+            "value": f"{results['tumor_percentage']:.2f}%",
+            "sub": "Share of the image",
+            "accent": ui.COLORS["danger"] if tumor else ui.COLORS["success"],
+        },
+        {
+            "label": "Tumor pixels",
+            "value": f"{results['tumor_pixels']:,}",
+            "sub": f"of {results['total_pixels']:,} pixels",
+            "accent": ui.COLORS["teal"],
+        },
+        {
+            "label": "Mask resolution",
+            "value": f"{mask_shape[0]}×{mask_shape[1]}",
+            "sub": "U-Net output",
+            "accent": ui.COLORS["muted"],
+        },
+    ])
+
+    ui.section_header(
+        "03",
+        "Imaging",
+        "Source scan, model attention, predicted tumor region and overlay.",
     )
 
+    ui.image_grid([
+        (data["image"], "Input", "Original MRI", "Uploaded scan"),
+        (results["heatmap"], "Grad-CAM", "Model attention", "Regions influencing the classifier"),
+        (results["predicted_mask"], "U-Net", "Segmentation mask", "Predicted tumor region"),
+        (results["overlay"], "Overlay", "Tumor overlay", "Predicted region over the MRI"),
+    ])
 
-    with patient_col1:
-
-        patient_id = st.text_input(
-
-            "Patient ID",
-
-            placeholder="Enter Patient ID"
-
-        )
-
-
-        patient_age = st.number_input(
-
-            "Age",
-
-            min_value=0,
-
-            max_value=120,
-
-            value=None,
-
-            placeholder="Enter Patient Age"
-
-        )
-
-
-    with patient_col2:
-
-        patient_sex = st.selectbox(
-
-            "Sex",
-
-            options=[
-                "Select Sex",
-                "Male",
-                "Female"
-            ]
-
-        )
-
-
-        report_date = st.date_input(
-            "Scan Date"
-        )
-
-
-    st.markdown("---")
-
-
-    
-    # MRI UPLOAD
-    
-
-    uploaded_file = st.file_uploader(
-
-        "📂 Upload a Brain MRI Image",
-
-        type=[
-            "jpg",
-            "jpeg",
-            "png"
-        ]
-
+    ui.section_header(
+        "04",
+        "Classification detail & report",
     )
 
+    prob_col, report_col = st.columns([1.5, 1], gap="large")
 
-    
-    # ANALYZE BUTTON
-    
+    with prob_col:
+        with st.container(border=True):
+            ui.card_title("Class probability distribution", "Softmax")
+            ui.probability_bars(
+                [display_class(name) for name in CLASS_NAMES],
+                results["probabilities"],
+            )
+
+    with report_col:
+        with st.container(border=True):
+            ui.card_title("Clinical report", "PDF")
+            st.markdown(
+                "A formatted PDF with patient details, the AI findings and all "
+                "four images, ready to share or archive."
+            )
+            st.download_button(
+                label="Download NeuroScan report",
+                icon=":material/download:",
+                data=data["pdf"],
+                file_name=f"NeuroScan_Report_{patient['id']}.pdf",
+                mime="application/pdf",
+                type="primary",
+                on_click="ignore",
+                width="stretch",
+            )
+
+
+if processing_mode == MODE_SINGLE:
+
+    ui.section_header(
+        "01",
+        "Patient intake",
+        "Enter the patient's details and upload a single axial brain MRI slice.",
+    )
+
+    intake_left, intake_right = st.columns([1.15, 1], gap="large")
+
+    with intake_left:
+        with st.container(border=True):
+
+            ui.card_title("Patient details", "Required")
+
+            patient_col1, patient_col2 = st.columns(2)
+
+            with patient_col1:
+
+                patient_id = st.text_input(
+                    "Patient ID",
+                    placeholder="e.g. NS-00142",
+                )
+
+                patient_age = st.number_input(
+                    "Age",
+                    min_value=0,
+                    max_value=120,
+                    value=None,
+                    placeholder="Years",
+                )
+
+            with patient_col2:
+
+                patient_sex = st.selectbox(
+                    "Sex",
+                    options=["Male", "Female"],
+                    index=None,
+                    placeholder="Select",
+                )
+
+                report_date = st.date_input(
+                    "Scan date"
+                )
+
+    with intake_right:
+        with st.container(border=True):
+
+            ui.card_title("MRI scan", "JPG or PNG")
+
+            uploaded_file = st.file_uploader(
+                "Brain MRI image",
+                type=["jpg", "jpeg", "png"],
+                label_visibility="collapsed",
+            )
+
+            preview_image = None
+
+            if uploaded_file is not None:
+                try:
+                    preview_image = Image.open(uploaded_file).convert("RGB")
+                    ui.image_preview(
+                        preview_image,
+                        uploaded_file.name,
+                        f"{preview_image.width}×{preview_image.height} px",
+                    )
+                except Exception:
+                    ui.callout(
+                        "Unreadable image",
+                        "This file could not be opened as an image. "
+                        "Please upload a valid JPG or PNG MRI slice.",
+                        kind="danger",
+                        icon="!",
+                    )
 
     analyze_button = st.button(
-
-        "🧠 Run NeuroScan Analysis",
-
-        use_container_width=True,
-
-        type="primary"
-
+        "Run NeuroScan analysis",
+        icon=":material/neurology:",
+        type="primary",
+        width="stretch",
     )
-
 
     if analyze_button:
 
-
-        
-        # VALIDATION
-        
+        missing = []
 
         if not patient_id:
-
-            st.warning(
-                "Please enter the Patient ID."
-            )
-
-            st.stop()
-
+            missing.append("Patient ID")
 
         if patient_age is None:
+            missing.append("Age")
 
-            st.warning(
-                "Please enter the patient's age."
-            )
-
-            st.stop()
-
-
-        if patient_sex == "Select Sex":
-
-            st.warning(
-                "Please select the patient's sex."
-            )
-
-            st.stop()
-
+        if patient_sex is None:
+            missing.append("Sex")
 
         if uploaded_file is None:
+            missing.append("MRI image")
 
-            st.warning(
-                "Please upload a Brain MRI image."
+        if missing:
+
+            ui.callout(
+                "Some details are missing",
+                "Please provide: <b>" + ", ".join(missing) + "</b>.",
+                kind="warning",
+                icon="!",
             )
 
-            st.stop()
+        elif preview_image is None:
 
-
-        
-        # LOAD IMAGE
-        
-
-        try:
-
-            image = Image.open(
-                uploaded_file
-            ).convert("RGB")
-
-        except Exception:
-
-            st.error(
-                "Unable to open image."
+            ui.callout(
+                "Unreadable image",
+                "The uploaded file could not be opened as an image.",
+                kind="danger",
+                icon="!",
             )
 
-            st.stop()
+        else:
 
+            with st.spinner("Running analysis..."):
 
-        
-        # ANALYSIS
-        
-
-        with st.spinner(
-
-            "NeuroScan is analyzing the MRI..."
-
-        ):
-
-            results = analyze_mri(
-
-                image=image,
-
-                patient_id=patient_id,
-
-                alpha=alpha
-
-            )
-
-
-        st.success(
-            "Analysis completed successfully!"
-        )
-
-
-        
-        # DISPLAY IMAGES
-        
-
-        col1, col2, col3 = st.columns(3)
-
-
-        with col1:
-
-            st.subheader(
-                "Original MRI"
-            )
-
-            st.image(
-                image,
-                use_container_width=True
-            )
-
-
-        with col2:
-
-            st.subheader(
-                "Grad-CAM"
-            )
-
-            st.image(
-
-                results["heatmap"],
-
-                caption=(
-                    "Regions influencing "
-                    "the classifier"
-                ),
-
-                use_container_width=True
-
-            )
-
-
-        with col3:
-
-            st.subheader(
-                "Segmentation Mask"
-            )
-
-            st.image(
-
-                results["predicted_mask"],
-
-                caption=(
-                    "Predicted Tumor Region"
-                ),
-
-                clamp=True,
-
-                use_container_width=True
-
-            )
-
-
-        st.subheader(
-            "Tumor Overlay"
-        )
-
-
-        st.image(
-
-            results["overlay"],
-
-            caption=(
-                "Predicted tumor region "
-                "overlaid on MRI"
-            ),
-
-            use_container_width=True
-
-        )
-
-
-        
-        # CREATE PDF
-        
-
-        pdf_buffer = create_pdf_report(
-
-            # Patient Information
-
-            patient_id=patient_id,
-
-            patient_age=patient_age,
-
-            patient_sex=patient_sex,
-
-            report_date=report_date,
-
-
-            # AI Results
-
-            prediction_name=(
-                results["prediction_name"]
-            ),
-
-            confidence=(
-                results["confidence"]
-            ),
-
-            tumor_percentage=(
-                results["tumor_percentage"]
-            ),
-
-            tumor_pixels=(
-                results["tumor_pixels"]
-            ),
-
-            total_pixels=(
-                results["total_pixels"]
-            ),
-
-
-            # Image Paths
-
-            original_image_path=str(
-
-                results["image_paths"]
-                ["original_path"]
-
-            ),
-
-            gradcam_path=str(
-
-                results["image_paths"]
-                ["gradcam_path"]
-
-            ),
-
-            mask_path=str(
-
-                results["image_paths"]
-                ["mask_path"]
-
-            ),
-
-            overlay_path=str(
-
-                results["image_paths"]
-                ["overlay_path"]
-
-            ),
-
-            logo_path=LOGO_PATH
-
-        )
-
-
-        
-        # AI ANALYSIS DASHBOARD
-        
-
-        st.markdown("---")
-
-        st.markdown(
-            "## AI Analysis Dashboard"
-        )
-
-
-        left_info, right_info = (
-            st.columns([1.2, 1])
-        )
-
-
-        
-        # CLASSIFICATION
-        
-
-        with left_info:
-
-            st.subheader(
-                "Classification"
-            )
-
-
-            st.metric(
-
-                "Predicted Tumor",
-
-                results[
-                    "prediction_name"
-                ].title()
-
-            )
-
-
-            st.metric(
-
-                "Confidence",
-
-                f"{results['confidence'] * 100:.2f}%"
-
-            )
-
-
-            st.progress(
-                float(
-                    results["confidence"]
-                )
-            )
-
-
-            if (
-
-                results[
-                    "prediction_name"
-                ].lower()
-
-                == "notumor"
-
-            ):
-
-                st.success(
-                    "No Tumor Detected"
+                results = analyze_mri(
+                    image=preview_image,
+                    patient_id=patient_id,
+                    alpha=alpha,
                 )
 
-            else:
-
-                st.error(
-
-                    "Tumor Detected: "
-
-                    f"{results['prediction_name'].title()}"
-
+                pdf_buffer = create_pdf_report(
+                    patient_id=patient_id,
+                    patient_age=patient_age,
+                    patient_sex=patient_sex,
+                    report_date=report_date,
+                    prediction_name=results["prediction_name"],
+                    confidence=results["confidence"],
+                    tumor_percentage=results["tumor_percentage"],
+                    tumor_pixels=results["tumor_pixels"],
+                    total_pixels=results["total_pixels"],
+                    original_image_path=str(results["image_paths"]["original_path"]),
+                    gradcam_path=str(results["image_paths"]["gradcam_path"]),
+                    mask_path=str(results["image_paths"]["mask_path"]),
+                    overlay_path=str(results["image_paths"]["overlay_path"]),
+                    logo_path=LOGO_PATH,
                 )
 
+            # Persist so results survive reruns (e.g. downloading the PDF)
+            st.session_state["single_report"] = {
+                "results": results,
+                "image": preview_image,
+                "pdf": pdf_buffer.getvalue(),
+                "patient": {
+                    "id": patient_id,
+                    "age": patient_age,
+                    "sex": patient_sex,
+                    "date": report_date.strftime("%d %b %Y"),
+                },
+            }
 
-        
-        # SEGMENTATION
-        
+    if "single_report" in st.session_state:
 
-        with right_info:
+        render_single_report(st.session_state["single_report"])
 
-            st.subheader(
-                "Segmentation"
-            )
+    else:
 
-
-            stat1, stat2 = (
-                st.columns(2)
-            )
-
-
-            with stat1:
-
-                st.metric(
-
-                    "Tumor Area",
-
-                    f"{results['tumor_percentage']:.2f}%"
-
-                )
-
-
-                st.metric(
-
-                    "Tumor Pixels",
-
-                    f"{results['tumor_pixels']:,}"
-
-                )
-
-
-            with stat2:
-
-                st.metric(
-
-                    "Image Pixels",
-
-                    f"{results['total_pixels']:,}"
-
-                )
-
-
-                mask_shape = (
-                    results[
-                        "predicted_mask"
-                    ].shape
-                )
-
-
-                st.metric(
-
-                    "Mask Size",
-
-                    f"{mask_shape[0]}×{mask_shape[1]}"
-
-                )
-
-
-        
-        # CLASS PROBABILITIES
-        
-
-        st.markdown("---")
-
-        st.subheader(
-            "Class Probability Distribution"
+        st.write("")
+        ui.empty_state(
+            "No analysis yet",
+            "Complete the intake form and run the analysis to see the report here.",
         )
-
-
-        for class_name, probability in zip(
-
-            classifier.config.CLASS_NAMES,
-
-            results["probabilities"]
-
-        ):
-
-            st.write(
-
-                f"**{class_name.title()}** "
-                f"— {probability * 100:.2f}%"
-
-            )
-
-
-            st.progress(
-                float(probability)
-            )
-
-
-        
-        # DOWNLOAD PDF
-        
-
-        st.markdown("---")
-
-        st.subheader(
-            "Download AI Report"
-        )
-
-
-        st.download_button(
-
-            label="📄 Download NeuroScan Report",
-
-            data=pdf_buffer,
-
-            file_name=(
-                f"NeuroScan_Report_{patient_id}.pdf"
-            ),
-
-            mime="application/pdf",
-
-            use_container_width=True
-
-        )
-
 
 
 # BATCH PROCESSING MODE
 
 
-elif processing_mode == "Batch Processing":
+elif processing_mode == MODE_BATCH:
 
-
-    st.subheader(
-        "Batch MRI Processing"
+    ui.section_header(
+        "01",
+        "Batch intake",
+        "Process multiple patients. Each scan produces its own PDF report, "
+        "and all reports are bundled into one ZIP file.",
     )
 
+    guide_col, upload_col = st.columns([1, 1.3], gap="large")
 
-    st.info(
-        """
-### Batch Upload Instructions
+    with guide_col:
 
-Upload multiple Brain MRI images.
+        ui.callout(
+            "Filename convention",
+            "Patient details are read from each filename using "
+            "<code>PATIENTID_AGE_SEX</code>.<br><br>"
+            "<code>NS001_24_Male.png</code><br>"
+            "<code>NS002_45_Female.jpg</code><br>"
+            "<code>NS003_31_M.png</code>",
+            kind="info",
+            icon="i",
+        )
 
-Each filename must follow this format:
+        report_date = st.date_input(
+            "Report / scan date",
+            value=date.today(),
+            key="batch_date",
+        )
 
-**PATIENTID_AGE_SEX**
+    with upload_col:
+        with st.container(border=True):
 
-Examples:
+            ui.card_title("MRI scans", "Multiple files")
 
-- NS001_24_Male.png
-- NS002_45_Female.jpg
-- NS003_31_Male.png
-
-The patient information will automatically
-be extracted from each filename.
-"""
-    )
-
-
-    
-    # DATE
-    
-
-    report_date = st.date_input(
-
-        "Report / Scan Date",
-
-        value=date.today(),
-
-        key="batch_date"
-
-    )
-
-
-    
-    # MULTIPLE FILE UPLOAD
-    
-
-    uploaded_files = st.file_uploader(
-
-        "📁 Upload MRI Images",
-
-        type=[
-            "jpg",
-            "jpeg",
-            "png"
-        ],
-
-        accept_multiple_files=True,
-
-        key="batch_upload"
-
-    )
-
+            uploaded_files = st.file_uploader(
+                "MRI images",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key="batch_upload",
+                label_visibility="collapsed",
+            )
 
     if uploaded_files:
 
-
-        st.success(
-
-            f"{len(uploaded_files)} MRI image(s) selected."
-
-        )
-
-
-        
-        # FILE PREVIEW
-        
-
-        st.subheader(
-            "Uploaded Files"
-        )
-
-
         preview_data = []
-
-
         valid_files = []
-
 
         for uploaded_file in uploaded_files:
 
-
             try:
 
-                patient_id, age, sex = (
-                    parse_patient_filename(
-                        uploaded_file.name
-                    )
+                patient_id, age, sex = parse_patient_filename(
+                    uploaded_file.name
                 )
-
 
                 preview_data.append({
-
-                    "Filename":
-                    uploaded_file.name,
-
-                    "Patient ID":
-                    patient_id,
-
-                    "Age":
-                    age,
-
-                    "Sex":
-                    sex,
-
-                    "Status":
-                    "Ready"
-
+                    "Status": "Ready",
+                    "Filename": uploaded_file.name,
+                    "Patient ID": patient_id,
+                    "Age": str(age),
+                    "Sex": sex,
+                    "Note": "",
                 })
 
-
-                valid_files.append(
-                    uploaded_file
-                )
-
+                valid_files.append(uploaded_file)
 
             except Exception as error:
 
-
                 preview_data.append({
-
-                    "Filename":
-                    uploaded_file.name,
-
-                    "Patient ID":
-                    "Invalid",
-
-                    "Age":
-                    "-",
-
-                    "Sex":
-                    "-",
-
-                    "Status":
-                    str(error)
-
+                    "Status": "Invalid",
+                    "Filename": uploaded_file.name,
+                    "Patient ID": "",
+                    "Age": "",
+                    "Sex": "",
+                    "Note": str(error),
                 })
 
+        invalid_count = len(uploaded_files) - len(valid_files)
+
+        ui.section_header(
+            "02",
+            "Review queue",
+            "Check that patient details were read correctly before processing.",
+        )
+
+        ui.stat_cards([
+            {"label": "Files selected", "value": f"{len(uploaded_files)}"},
+            {
+                "label": "Ready",
+                "value": f"{len(valid_files)}",
+                "accent": ui.COLORS["success"],
+            },
+            {
+                "label": "Invalid names",
+                "value": f"{invalid_count}",
+                "accent": ui.COLORS["danger"] if invalid_count else ui.COLORS["muted"],
+            },
+        ])
 
         st.dataframe(
-
             preview_data,
-
-            use_container_width=True,
-
-            hide_index=True
-
+            width="stretch",
+            hide_index=True,
         )
-
-
-        
-        # PROCESS BUTTON
-        
 
         process_batch_button = st.button(
-
-            f"🧠 Process {len(valid_files)} MRI Scan(s)",
-
+            f"Process {len(valid_files)} MRI scan(s)",
+            icon=":material/neurology:",
             type="primary",
-
-            use_container_width=True
-
+            width="stretch",
+            disabled=not valid_files,
         )
-
 
         if process_batch_button:
 
-
-            if not valid_files:
-
-                st.error(
-                    "No valid files available for processing."
-                )
-
-                st.stop()
-
-
-            
-            # ZIP BUFFER
-            
-
             zip_buffer = BytesIO()
-
-
             successful_reports = []
-
-
             failed_reports = []
 
+            with st.status(
+                f"Processing {len(valid_files)} scan(s)...",
+                expanded=True,
+            ) as status:
 
-            progress_bar = st.progress(0)
+                progress_bar = st.progress(0.0)
+                status_text = st.empty()
 
+                with zipfile.ZipFile(zip_buffer, "w", zipfile.ZIP_DEFLATED) as zip_file:
 
-            status_text = st.empty()
+                    for index, uploaded_file in enumerate(valid_files):
 
+                        try:
 
-            with zipfile.ZipFile(
-
-                zip_buffer,
-
-                "w",
-
-                zipfile.ZIP_DEFLATED
-
-            ) as zip_file:
-
-
-                for index, uploaded_file in enumerate(
-                    valid_files
-                ):
-
-
-                    try:
-
-
-                        
-                        # PARSE PATIENT INFORMATION
-                        
-
-                        patient_id, patient_age, patient_sex = (
-
-                            parse_patient_filename(
-                                uploaded_file.name
+                            patient_id, patient_age, patient_sex = (
+                                parse_patient_filename(uploaded_file.name)
                             )
 
-                        )
-
-
-                        status_text.info(
-
-                            f"Processing "
-                            f"{index + 1} of "
-                            f"{len(valid_files)}: "
-
-                            f"{patient_id}"
-
-                        )
-
-
-                        
-                        # LOAD MRI
-                        
-
-                        image = Image.open(
-
-                            uploaded_file
-
-                        ).convert("RGB")
-
-
-                        
-                        # RUN ANALYSIS
-                        
-
-                        results = analyze_mri(
-
-                            image=image,
-
-                            patient_id=patient_id,
-
-                            alpha=alpha
-
-                        )
-
-
-                        
-                        # CREATE PDF REPORT
-                        
-
-                        pdf_buffer = create_pdf_report(
-
-                            patient_id=patient_id,
-
-                            patient_age=patient_age,
-
-                            patient_sex=patient_sex,
-
-                            report_date=report_date,
-
-
-                            prediction_name=(
-                                results[
-                                    "prediction_name"
-                                ]
-                            ),
-
-                            confidence=(
-                                results[
-                                    "confidence"
-                                ]
-                            ),
-
-                            tumor_percentage=(
-                                results[
-                                    "tumor_percentage"
-                                ]
-                            ),
-
-                            tumor_pixels=(
-                                results[
-                                    "tumor_pixels"
-                                ]
-                            ),
-
-                            total_pixels=(
-                                results[
-                                    "total_pixels"
-                                ]
-                            ),
-
-
-                            original_image_path=str(
-
-                                results["image_paths"]
-                                ["original_path"]
-
-                            ),
-
-                            gradcam_path=str(
-
-                                results["image_paths"]
-                                ["gradcam_path"]
-
-                            ),
-
-                            mask_path=str(
-
-                                results["image_paths"]
-                                ["mask_path"]
-
-                            ),
-
-                            overlay_path=str(
-
-                                results["image_paths"]
-                                ["overlay_path"]
-
-                            ),
-
-                            logo_path=LOGO_PATH
-
-                        )
-
-
-                        
-                        # ADD PDF TO ZIP
-                        
-
-                        pdf_filename = (
-
-                            f"NeuroScan_Report_"
-                            f"{patient_id}.pdf"
-
-                        )
-
-
-                        zip_file.writestr(
-
-                            pdf_filename,
-
-                            pdf_buffer.getvalue()
-
-                        )
-
-
-                        successful_reports.append({
-
-                            "Patient ID":
-                            patient_id,
-
-                            "Filename":
-                            pdf_filename,
-
-                            "Prediction":
-                            results[
-                                "prediction_name"
-                            ].title(),
-
-                            "Confidence":
-                            (
-                                f"{results['confidence'] * 100:.2f}%"
+                            status_text.caption(
+                                f"Scan {index + 1} of {len(valid_files)} · {patient_id}"
                             )
 
-                        })
+                            image = Image.open(uploaded_file).convert("RGB")
 
+                            results = analyze_mri(
+                                image=image,
+                                patient_id=patient_id,
+                                alpha=alpha,
+                            )
 
-                    except Exception as error:
+                            pdf_buffer = create_pdf_report(
+                                patient_id=patient_id,
+                                patient_age=patient_age,
+                                patient_sex=patient_sex,
+                                report_date=report_date,
+                                prediction_name=results["prediction_name"],
+                                confidence=results["confidence"],
+                                tumor_percentage=results["tumor_percentage"],
+                                tumor_pixels=results["tumor_pixels"],
+                                total_pixels=results["total_pixels"],
+                                original_image_path=str(results["image_paths"]["original_path"]),
+                                gradcam_path=str(results["image_paths"]["gradcam_path"]),
+                                mask_path=str(results["image_paths"]["mask_path"]),
+                                overlay_path=str(results["image_paths"]["overlay_path"]),
+                                logo_path=LOGO_PATH,
+                            )
 
+                            pdf_filename = f"NeuroScan_Report_{patient_id}.pdf"
 
-                        failed_reports.append({
+                            zip_file.writestr(pdf_filename, pdf_buffer.getvalue())
 
-                            "Filename":
-                            uploaded_file.name,
+                            successful_reports.append({
+                                "Patient ID": patient_id,
+                                "Age": str(patient_age),
+                                "Sex": patient_sex,
+                                "Finding": display_class(results["prediction_name"]),
+                                "Confidence": float(results["confidence"]),
+                                "Tumor area %": round(float(results["tumor_percentage"]), 2),
+                                "Report": pdf_filename,
+                            })
 
-                            "Error":
-                            str(error)
+                        except Exception as error:
 
-                        })
+                            failed_reports.append({
+                                "Filename": uploaded_file.name,
+                                "Error": str(error),
+                            })
 
+                        progress_bar.progress((index + 1) / len(valid_files))
 
-                    
-                    # UPDATE PROGRESS
-                    
+                status_text.empty()
 
-                    progress = (
-
-                        (index + 1)
-
-                        /
-
-                        len(valid_files)
-
-                    )
-
-
-                    progress_bar.progress(
-                        progress
-                    )
-
-
-            
-            # SAVE ZIP IN SESSION STATE
-            
+                status.update(
+                    label=(
+                        f"Batch complete · {len(successful_reports)} report(s) generated"
+                        + (f", {len(failed_reports)} failed" if failed_reports else "")
+                    ),
+                    state="error" if failed_reports and not successful_reports else "complete",
+                    expanded=False,
+                )
 
             zip_buffer.seek(0)
 
+            st.session_state["batch_zip"] = zip_buffer.getvalue()
+            st.session_state["batch_successful_reports"] = successful_reports
+            st.session_state["batch_failed_reports"] = failed_reports
 
-            st.session_state[
-                "batch_zip"
-            ] = zip_buffer.getvalue()
+    elif "batch_successful_reports" not in st.session_state:
 
+        st.write("")
+        ui.empty_state(
+            "No scans queued",
+            "Upload one or more MRI images named PATIENTID_AGE_SEX to begin.",
+        )
 
-            st.session_state[
-                "batch_successful_reports"
-            ] = successful_reports
-
-
-            st.session_state[
-                "batch_failed_reports"
-            ] = failed_reports
-
-
-            status_text.empty()
-
-
-            st.success(
-
-                f"Batch processing complete! "
-
-                f"{len(successful_reports)} report(s) "
-                f"generated successfully."
-
-            )
-
-
-    
     # BATCH RESULTS
-    
 
     if "batch_successful_reports" in st.session_state:
 
+        successful_reports = st.session_state["batch_successful_reports"]
+        failed_reports = st.session_state.get("batch_failed_reports", [])
 
-        successful_reports = (
-
-            st.session_state[
-                "batch_successful_reports"
-            ]
-
+        tumor_count = sum(
+            1 for report in successful_reports
+            if report["Finding"] != "No Tumor"
         )
 
-
-        failed_reports = (
-
-            st.session_state.get(
-                "batch_failed_reports",
-                []
-            )
-
+        ui.section_header(
+            "03",
+            "Batch results",
+            "Summary of every processed scan. Reports are bundled in the ZIP below.",
         )
 
+        ui.stat_cards([
+            {"label": "Reports generated", "value": f"{len(successful_reports)}"},
+            {
+                "label": "Tumor detected",
+                "value": f"{tumor_count}",
+                "accent": ui.COLORS["danger"],
+            },
+            {
+                "label": "No tumor",
+                "value": f"{len(successful_reports) - tumor_count}",
+                "accent": ui.COLORS["success"],
+            },
+            {
+                "label": "Failed",
+                "value": f"{len(failed_reports)}",
+                "accent": ui.COLORS["warning"] if failed_reports else ui.COLORS["muted"],
+            },
+        ])
 
         if successful_reports:
 
-
-            st.markdown("---")
-
-            st.subheader(
-                "Batch Processing Results"
-            )
-
-
-            st.success(
-
-                f"Successfully generated "
-
-                f"{len(successful_reports)} "
-
-                f"report(s)."
-
-            )
-
-
             st.dataframe(
-
                 successful_reports,
-
-                use_container_width=True,
-
-                hide_index=True
-
+                width="stretch",
+                hide_index=True,
+                column_config={
+                    "Confidence": st.column_config.ProgressColumn(
+                        "Confidence",
+                        min_value=0.0,
+                        max_value=1.0,
+                        format="percent",
+                    ),
+                    "Tumor area %": st.column_config.NumberColumn(
+                        "Tumor area",
+                        format="%.2f%%",
+                    ),
+                },
             )
-
 
         if failed_reports:
 
-
-            st.warning(
-
-                f"{len(failed_reports)} file(s) "
-                f"could not be processed."
-
-            )
-
-
-            with st.expander(
-                "View Failed Files"
-            ):
-
+            with st.expander(f"View {len(failed_reports)} failed file(s)"):
                 st.dataframe(
-
                     failed_reports,
-
-                    use_container_width=True,
-
-                    hide_index=True
-
+                    width="stretch",
+                    hide_index=True,
                 )
 
-
-        
-        # DOWNLOAD ZIP
-        
-
-        if "batch_zip" in st.session_state:
-
-
-            st.markdown("---")
-
-
-            st.subheader(
-                "Download Batch Reports"
-            )
-
+        if successful_reports and "batch_zip" in st.session_state:
 
             st.download_button(
-
-                label=(
-                    "📦 Download All "
-                    "NeuroScan Reports (ZIP)"
-                ),
-
-                data=st.session_state[
-                    "batch_zip"
-                ],
-
-                file_name=(
-                    "NeuroScan_Batch_Reports.zip"
-                ),
-
+                label=f"Download all {len(successful_reports)} reports (ZIP)",
+                icon=":material/folder_zip:",
+                data=st.session_state["batch_zip"],
+                file_name="NeuroScan_Batch_Reports.zip",
                 mime="application/zip",
-
-                use_container_width=True,
-
-                type="primary"
-
+                type="primary",
+                on_click="ignore",
+                width="stretch",
             )
 
-
- # VOLUMETRIC PROCESSING MODE
 
 # 3D VOLUMETRIC PROCESSING MODE
 
-elif processing_mode == "3D Volumetric Processing":
 
-    st.subheader("3D Volumetric Tumor Reconstruction")
+elif processing_mode == MODE_VOLUME:
 
-    st.info(
-        "Upload a sequence of MRI slices for a single patient. "
-        "The AI will process all slices, isolate the tumor regions, "
-        "and reconstruct them inside a translucent anatomical brain envelope."
+    ui.section_header(
+        "01",
+        "Volume intake",
+        "Upload an ordered sequence of MRI slices from one patient to reconstruct "
+        "the tumor in 3D inside a translucent cranial envelope.",
     )
 
-    # 3D Depth Scaling Control
-    z_aspect = st.slider(
-        "Slice Depth Spacing (Z-Axis Aspect Multiplier)",
-        min_value=1.0,
-        max_value=6.0,
-        value=3.0,
-        step=0.5,
-        help="Adjusts anatomical spacing between slices so the scan volume is not flattened."
-    )
+    upload_col, settings_col = st.columns([1.3, 1], gap="large")
 
-    # MULTIPLE FILE UPLOAD
-    uploaded_slices = st.file_uploader(
-        "📁 Upload MRI Sequence",
-        type=["jpg", "jpeg", "png"],
-        accept_multiple_files=True,
-        key="3d_upload"
-    )
+    with upload_col:
+        with st.container(border=True):
+
+            ui.card_title("MRI slice sequence", "Multiple files")
+
+            uploaded_slices = st.file_uploader(
+                "MRI sequence",
+                type=["jpg", "jpeg", "png"],
+                accept_multiple_files=True,
+                key="3d_upload",
+                label_visibility="collapsed",
+            )
+
+    with settings_col:
+        with st.container(border=True):
+
+            ui.card_title("Reconstruction settings")
+
+            z_aspect = st.slider(
+                "Slice depth spacing (Z multiplier)",
+                min_value=1.0,
+                max_value=6.0,
+                value=3.0,
+                step=0.5,
+                help="Adjusts spacing between slices so the volume isn't flattened.",
+            )
+
+            st.caption(
+                "Slices are ordered naturally by filename "
+                "(slice_2 before slice_10)."
+            )
 
     if uploaded_slices:
-        # Step A: Sort files using the natural sorting key
-        uploaded_slices = sorted(uploaded_slices, key=lambda x: natural_sort_key(x.name))
-        
-        st.success(f"{len(uploaded_slices)} slices sorted sequentially and ready.")
 
-        if st.button("🧠 Generate Volumetric Analysis", type="primary", use_container_width=True):
-            
+        uploaded_slices = sorted(
+            uploaded_slices,
+            key=lambda x: natural_sort_key(x.name),
+        )
+
+        ui.callout(
+            f"{len(uploaded_slices)} slices ready",
+            f"Ordered from <code>{html.escape(uploaded_slices[0].name)}</code> "
+            f"to <code>{html.escape(uploaded_slices[-1].name)}</code>.",
+            kind="success",
+            icon="✓",
+        )
+
+        if st.button(
+            "Generate volumetric analysis",
+            icon=":material/view_in_ar:",
+            type="primary",
+            width="stretch",
+        ):
+
             tumor_masks_2d = []
             brain_outline_masks_2d = []
             slice_diagnostic_records = []
-            
+
             pertinent_count = 0
-            sum_probabilities = np.zeros(len(classifier.config.CLASS_NAMES))
+            sum_probabilities = np.zeros(len(CLASS_NAMES))
             sum_confidence = 0.0
-            
             volume_tumor_pixels = 0
             volume_total_pixels = 0
-            
-            progress_bar = st.progress(0)
-            status_text = st.empty()
+            processing_failed = False
 
-            # Step B: Model-Driven Processing Loop
-            for index, slice_file in enumerate(uploaded_slices):
-                status_text.info(f"Processing slice {index + 1} of {len(uploaded_slices)}: {slice_file.name}")
-                
-                try:
-                    image = Image.open(slice_file).convert("RGB")
-                    image_np = np.array(image)
-                    
-                    # Run existing analysis pipeline
-                    results = analyze_mri(image=image, patient_id="3D_Temp", alpha=0.5)
-                    
-                    pred_name = results["prediction_name"]
-                    conf = results["confidence"]
-                    t_pixels = results["tumor_pixels"]
-                    
-                    # Record diagnostic info per slice
-                    slice_diagnostic_records.append({
-                        "Filename": slice_file.name,
-                        "Prediction": pred_name.replace("notumor", "No Tumor").title(),
-                        "Confidence": conf,
-                        "Tumor Pixels": t_pixels,
-                        "Probabilities": results["probabilities"]
-                    })
-                    
-                    # Track metrics for pertinent scans
-                    if pred_name.lower() != "notumor":
-                        pertinent_count += 1
-                        sum_probabilities += results["probabilities"]
-                        sum_confidence += conf
-                    
-                    volume_tumor_pixels += t_pixels
-                    volume_total_pixels += results["total_pixels"]
-                    
-                    # Extract binary tumor mask
-                    mask = results["predicted_mask"]
-                    binary_mask = (mask > 0).astype(np.uint8)
-                    tumor_masks_2d.append(binary_mask)
-                    
-                    # Extract brain outer perimeter contour (boundary outline)
-                    gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-                    _, thresh = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
-                    contours, _ = cv2.findContours(thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE)
-                    
-                    outline_mask = np.zeros_like(gray, dtype=np.uint8)
-                    if contours:
-                        # Draw exclusively the outer boundary line
-                        cv2.drawContours(outline_mask, contours, -1, color=1, thickness=2)
-                    brain_outline_masks_2d.append(outline_mask)
+            with st.status(
+                f"Analyzing {len(uploaded_slices)} slices...",
+                expanded=True,
+            ) as status:
 
-                except Exception as error:
-                    st.error(f"Error processing {slice_file.name}: {error}")
-                    st.stop()
-                
-                progress_bar.progress((index + 1) / len(uploaded_slices))
+                progress_bar = st.progress(0.0)
+                status_text = st.empty()
 
-            status_text.success("Slices processed successfully! Assembling visualization...")
-            
-            # --- CALCULATE AGGREGATE PREDICTION ---
+                for index, slice_file in enumerate(uploaded_slices):
+
+                    status_text.caption(
+                        f"Slice {index + 1} of {len(uploaded_slices)} · {slice_file.name}"
+                    )
+
+                    try:
+
+                        image = Image.open(slice_file).convert("RGB")
+                        image_np = np.array(image)
+
+                        results = analyze_mri(
+                            image=image,
+                            patient_id="3D_Temp",
+                            alpha=0.5,
+                        )
+
+                        pred_name = results["prediction_name"]
+                        conf = results["confidence"]
+                        t_pixels = results["tumor_pixels"]
+
+                        slice_diagnostic_records.append({
+                            "Filename": slice_file.name,
+                            "Prediction": display_class(pred_name),
+                            "Confidence": conf,
+                            "Tumor Pixels": t_pixels,
+                            "Probabilities": results["probabilities"],
+                        })
+
+                        if is_tumor_class(pred_name):
+                            pertinent_count += 1
+                            sum_probabilities += results["probabilities"]
+                            sum_confidence += conf
+
+                        volume_tumor_pixels += t_pixels
+                        volume_total_pixels += results["total_pixels"]
+
+                        mask = results["predicted_mask"]
+                        tumor_masks_2d.append((mask > 0).astype(np.uint8))
+
+                        # Outer brain boundary for the cranial envelope
+                        gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
+                        _, thresh = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
+                        contours, _ = cv2.findContours(
+                            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
+                        )
+                        outline_mask = np.zeros_like(gray, dtype=np.uint8)
+                        if contours:
+                            cv2.drawContours(outline_mask, contours, -1, color=1, thickness=2)
+                        brain_outline_masks_2d.append(outline_mask)
+
+                    except Exception as error:
+
+                        status.update(
+                            label=f"Failed on {slice_file.name}",
+                            state="error",
+                            expanded=True,
+                        )
+                        st.error(f"Error processing {slice_file.name}: {error}")
+                        processing_failed = True
+                        break
+
+                    progress_bar.progress((index + 1) / len(uploaded_slices))
+
+                if not processing_failed:
+                    status_text.empty()
+                    status.update(
+                        label=f"Analyzed {len(uploaded_slices)} slices",
+                        state="complete",
+                        expanded=False,
+                    )
+
+            if processing_failed:
+                st.stop()
+
+            # AGGREGATE PREDICTION
+
             if pertinent_count > 0:
                 avg_probabilities = sum_probabilities / pertinent_count
                 avg_confidence = sum_confidence / pertinent_count
-                best_class_idx = np.argmax(avg_probabilities)
-                best_tumor_class = classifier.config.CLASS_NAMES[best_class_idx]
+                best_class_idx = int(np.argmax(avg_probabilities))
+                best_tumor_class = CLASS_NAMES[best_class_idx]
             else:
-                best_tumor_class = "No Tumor Detected"
-                avg_confidence = 0.0
-                avg_probabilities = np.zeros(len(classifier.config.CLASS_NAMES))
+                avg_probabilities = np.zeros(len(CLASS_NAMES))
+                avg_confidence = None
                 best_class_idx = None
-                
-            overall_tumor_percentage = (volume_tumor_pixels / volume_total_pixels) * 100 if volume_total_pixels > 0 else 0
+                best_tumor_class = None
 
-            # --- AI ANALYSIS DASHBOARD ---
-            st.markdown("---")
-            st.markdown("## Volumetric AI Analysis Dashboard")
+            overall_tumor_percentage = (
+                (volume_tumor_pixels / volume_total_pixels) * 100
+                if volume_total_pixels > 0 else 0
+            )
 
-            left_info, right_info = st.columns([1.2, 1])
-
-            with left_info:
-                st.subheader("Classification (Averaged Across Pertinent Slices)")
-                st.metric("Predicted Tumor", best_tumor_class.title())
-                
-                if best_tumor_class.lower() != "no tumor detected":
-                    st.metric("Average Confidence", f"{avg_confidence * 100:.2f}%")
-                    st.progress(float(avg_confidence))
-                    st.error(f"Tumor Detected: {best_tumor_class.title()}")
-                else:
-                    st.metric("Average Confidence", "N/A")
-                    st.success("No Tumor Detected in Volume")
-
-            with right_info:
-                st.subheader("Volumetric Segmentation")
-                stat1, stat2 = st.columns(2)
-                with stat1:
-                    st.metric("Overall Tumor Area", f"{overall_tumor_percentage:.2f}%")
-                    st.metric("Total Tumor Voxels", f"{volume_tumor_pixels:,}")
-                with stat2:
-                    st.metric("Total Volume Voxels", f"{volume_total_pixels:,}")
-                    st.metric("Slices Processed", f"{len(uploaded_slices)}")
-
-            # --- RANKED INFLUENTIAL SCANS ---
-            st.markdown("---")
-            st.subheader("Diagnostic Influence Ranking")
-            st.caption("Scans ranked from most influential to least influential in arriving at the overall diagnosis.")
+            # RANK SLICES
 
             if best_class_idx is not None:
-                # Rank slices by probability towards the diagnosed tumor class, then by tumor area
                 ranked_scans = sorted(
                     slice_diagnostic_records,
                     key=lambda x: (x["Probabilities"][best_class_idx], x["Tumor Pixels"]),
-                    reverse=True
+                    reverse=True,
                 )
             else:
-                # Fallback ranking by confidence if no tumor was detected
                 ranked_scans = sorted(
                     slice_diagnostic_records,
                     key=lambda x: x["Confidence"],
-                    reverse=True
+                    reverse=True,
                 )
 
             ranking_table_data = [
                 {
                     "Rank": idx + 1,
-                    "Scan Filename": r["Filename"],
+                    "Slice": r["Filename"],
                     "Prediction": r["Prediction"],
-                    "Confidence": f"{r['Confidence'] * 100:.2f}%",
-                    "Tumor Pixels": f"{r['Tumor Pixels']:,}"
+                    "Confidence": float(r["Confidence"]),
+                    "Tumor pixels": int(r["Tumor Pixels"]),
                 }
                 for idx, r in enumerate(ranked_scans)
             ]
-            st.dataframe(ranking_table_data, use_container_width=True, hide_index=True)
 
-            # --- 3D RENDERING ---
-            st.markdown("---")
-            st.info("Generating 3D volumetric model...")
-            
-            # Stack arrays along Z-axis (Z, Y, X)
-            tumor_volume_3d = np.stack(tumor_masks_2d, axis=0) 
+            # 3D MESHES
+
+            tumor_volume_3d = np.stack(tumor_masks_2d, axis=0)
             brain_outline_3d = np.stack(brain_outline_masks_2d, axis=0)
-            
+
             fig = go.Figure()
-            
-            # 1. Render Brain Boundary Envelope (Translucent Outline)
+            mesh_error = None
+
             if np.max(brain_outline_3d) > 0:
                 try:
-                    # spacing applies Z-axis aspect ratio so boundaries spread out anatomically
                     b_verts, b_faces, _, _ = marching_cubes(
-                        brain_outline_3d, 
-                        level=0.5, 
-                        spacing=(z_aspect, 1.0, 1.0)
+                        brain_outline_3d,
+                        level=0.5,
+                        spacing=(z_aspect, 1.0, 1.0),
                     )
                     fig.add_trace(go.Mesh3d(
-                        x=b_verts[:, 2],  # X (Width)
-                        y=b_verts[:, 1],  # Y (Height)
-                        z=b_verts[:, 0],  # Z (Depth/Slices)
+                        x=b_verts[:, 2], y=b_verts[:, 1], z=b_verts[:, 0],
                         i=b_faces[:, 0], j=b_faces[:, 1], k=b_faces[:, 2],
-                        color='lightblue',
-                        opacity=0.15,     # Translucent outer boundary
-                        name='Cranial Boundary',
-                        hoverinfo='skip'
+                        color="#94A3B8",
+                        opacity=0.12,
+                        name="Cranial boundary",
+                        showlegend=True,
+                        hoverinfo="skip",
                     ))
                 except Exception:
                     pass
-                    
-            # 2. Render Tumor Volume Mesh
+
             if np.max(tumor_volume_3d) > 0:
                 try:
                     t_verts, t_faces, _, _ = marching_cubes(
-                        tumor_volume_3d, 
-                        level=0.5, 
-                        spacing=(z_aspect, 1.0, 1.0)
+                        tumor_volume_3d,
+                        level=0.5,
+                        spacing=(z_aspect, 1.0, 1.0),
                     )
                     fig.add_trace(go.Mesh3d(
-                        x=t_verts[:, 2],
-                        y=t_verts[:, 1],
-                        z=t_verts[:, 0],
+                        x=t_verts[:, 2], y=t_verts[:, 1], z=t_verts[:, 0],
                         i=t_faces[:, 0], j=t_faces[:, 1], k=t_faces[:, 2],
-                        color='crimson',
-                        opacity=0.85,
-                        name='Tumor Mass'
+                        color="#EF4444",
+                        opacity=0.9,
+                        name="Tumor mass",
+                        showlegend=True,
+                        lighting=dict(ambient=0.45, diffuse=0.8, specular=0.35, roughness=0.5),
+                        lightposition=dict(x=100, y=200, z=150),
                     ))
-                except Exception as e:
-                    st.error(f"Failed to extract tumor mesh: {e}")
-            
-            if len(fig.data) > 0:
-                fig.update_layout(
-                    scene=dict(
-                        xaxis_title='X (Width)', 
-                        yaxis_title='Y (Height)', 
-                        zaxis_title='Z (Slice Depth)',
-                        aspectmode='data'
-                    ),
-                    margin=dict(l=0, r=0, b=0, t=0),
-                    height=700
+                except Exception as error:
+                    mesh_error = str(error)
+
+            st.session_state["volume_report"] = {
+                "best_class": best_tumor_class,
+                "avg_confidence": avg_confidence,
+                "avg_probabilities": avg_probabilities,
+                "pertinent_count": pertinent_count,
+                "slice_count": len(uploaded_slices),
+                "tumor_pct": overall_tumor_percentage,
+                "tumor_voxels": volume_tumor_pixels,
+                "total_voxels": volume_total_pixels,
+                "ranking": ranking_table_data,
+                "figure": ui.style_3d_figure(fig) if len(fig.data) > 0 else None,
+                "mesh_error": mesh_error,
+            }
+
+    elif "volume_report" not in st.session_state:
+
+        st.write("")
+        ui.empty_state(
+            "No volume loaded",
+            "Upload a sequence of MRI slices from a single patient to begin.",
+        )
+
+    # VOLUMETRIC RESULTS
+
+    if "volume_report" in st.session_state:
+
+        report = st.session_state["volume_report"]
+
+        ui.section_header(
+            "02",
+            "Volumetric report",
+            f"{report['slice_count']} slices analyzed · "
+            f"{report['pertinent_count']} showed a tumor pattern.",
+        )
+
+        if report["best_class"] is not None:
+            ui.diagnosis_banner(
+                title=display_class(report["best_class"]),
+                kicker="Volume result",
+                note="Averaged across slices where a tumor pattern was found.",
+                confidence=report["avg_confidence"],
+                kind="danger",
+            )
+        else:
+            ui.diagnosis_banner(
+                title="No tumor detected",
+                kicker="Volume result",
+                note="No slice in this sequence showed a tumor pattern.",
+                confidence=None,
+                kind="success",
+            )
+
+        ui.stat_cards([
+            {
+                "label": "Tumor area",
+                "value": f"{report['tumor_pct']:.2f}%",
+                "sub": "Across the whole volume",
+                "accent": ui.COLORS["danger"],
+            },
+            {
+                "label": "Tumor voxels",
+                "value": f"{report['tumor_voxels']:,}",
+                "accent": ui.COLORS["teal"],
+            },
+            {
+                "label": "Total voxels",
+                "value": f"{report['total_voxels']:,}",
+                "accent": ui.COLORS["muted"],
+            },
+            {
+                "label": "Slices",
+                "value": f"{report['pertinent_count']} / {report['slice_count']}",
+                "sub": "With tumor pattern",
+            },
+        ])
+
+        ui.section_header(
+            "03",
+            "3D reconstruction",
+            "Drag to rotate, scroll to zoom. Red marks the predicted tumor mass.",
+        )
+
+        with st.container(border=True):
+
+            if report["figure"] is not None:
+                st.plotly_chart(
+                    report["figure"],
+                    width="stretch",
+                    theme="streamlit",
+                    config={"displaylogo": False},
                 )
-                
-                st.subheader("Interactive 3D Tumor Model")
-                st.plotly_chart(fig, use_container_width=True)
             else:
-                st.warning("No structures detected in the uploaded slices to generate a 3D model.")
+                ui.empty_state(
+                    "Nothing to reconstruct",
+                    "No structures were detected in the uploaded slices.",
+                )
 
-st.markdown("---")
+            if report["mesh_error"]:
+                st.caption(f"Tumor mesh could not be built: {report['mesh_error']}")
 
+        ui.section_header(
+            "04",
+            "Diagnostic detail",
+        )
 
-with st.expander(
-    "How NeuroScan Works"
-):
+        detail_left, detail_right = st.columns([1, 1.4], gap="large")
 
+        with detail_left:
+            with st.container(border=True):
+                ui.card_title("Averaged class probabilities", "Tumor slices")
+                if report["best_class"] is not None:
+                    ui.probability_bars(
+                        [display_class(name) for name in CLASS_NAMES],
+                        report["avg_probabilities"],
+                    )
+                else:
+                    st.caption("Not applicable. No tumor slices in this volume.")
 
-    st.markdown(
-        """
-### AI Processing Pipeline
-
-1. Upload a brain MRI image.
-
-2. Convert the image to RGB format.
-
-3. Resize and normalize the image.
-
-4. Pass the MRI through the **EfficientNet-B0 Classification Model**.
-
-5. Predict the tumor class and confidence scores.
-
-6. Generate a **Grad-CAM** visualization.
-
-7. Pass the MRI through the **U-Net Segmentation Model**.
-
-8. Generate a predicted tumor mask.
-
-9. Calculate tumor area statistics.
-
-10. Overlay the predicted tumor region onto the MRI.
-
-11. Generate a detailed PDF report.
-
-### Batch Processing
-
-For batch processing, NeuroScan automatically:
-
-1. Reads multiple MRI images.
-
-2. Extracts patient information from filenames.
-
-3. Analyzes every MRI individually.
-
-4. Generates an individual PDF report for each patient.
-
-5. Packages all reports into a ZIP file.
-
-6. Allows the user to download all reports at once.
-"""
-    )
+        with detail_right:
+            with st.container(border=True):
+                ui.card_title("Slice influence ranking", "Highest first")
+                st.dataframe(
+                    report["ranking"],
+                    width="stretch",
+                    hide_index=True,
+                    height=320,
+                    column_config={
+                        "Rank": st.column_config.NumberColumn("Rank", width="small"),
+                        "Confidence": st.column_config.ProgressColumn(
+                            "Confidence",
+                            min_value=0.0,
+                            max_value=1.0,
+                            format="percent",
+                        ),
+                        "Tumor pixels": st.column_config.NumberColumn(
+                            "Tumor pixels",
+                            format="localized",
+                        ),
+                    },
+                )
 
 
-
-# MODEL INFORMATION
-
-
-with st.expander(
-    "Model Information"
-):
+# ABOUT NEURO SCAN
 
 
-    st.markdown(
-
-        f"""
-### Classification Model
-
-**Architecture**
-
-- EfficientNet-B0
-
-**Transfer Learning**
-
-- {"Enabled" if classifier.config.PRETRAINED else "Disabled"}
-
-**Number of Classes**
-
-- {classifier.config.NUM_CLASSES}
-
-**Input Resolution**
-
-- 224 × 224
-
-### Segmentation Model
-
-- U-Net
-
-### Framework
-
-- PyTorch
-
-### Classification Device
-
-- {classifier.config.DEVICE}
-
-### Segmentation Device
-
-- {seg_config.DEVICE}
-"""
-
-    )
-
-
-    st.write(
-        "Trained on the Brain Tumor Dataset consisting "
-        "of approximately 5,000 MRI images."
-    )
-
-
-
-# MEDICAL DISCLAIMER
-
-
-st.markdown("---")
-
-
-st.warning(
-    """
-### Medical Disclaimer
-
-NeuroScan is a prototype.
-
-It is **NOT** intended to replace professional
-medical diagnosis or the opinion of a qualified
-radiologist or physician.
-
-Always consult a qualified medical professional
-before making clinical decisions.
-"""
+ui.section_header(
+    "i",
+    "About NeuroScan",
 )
 
+about_pipeline, about_model, about_disclaimer = st.tabs([
+    "How it works",
+    "Model information",
+    "Medical disclaimer",
+])
+
+with about_pipeline:
+
+    st.write("")
+
+    ui.pipeline([
+        ("Ingest", "The MRI is converted to RGB, resized and normalized."),
+        ("Classify", "EfficientNet-B0 predicts the tumor class and confidence."),
+        ("Explain", "Grad-CAM highlights the regions that drove the prediction."),
+        ("Segment", "U-Net predicts a pixel-level tumor mask."),
+        ("Quantify", "Tumor area and pixel counts are computed from the mask."),
+        ("Report", "Findings and images are compiled into a PDF report."),
+    ])
+
+    st.caption(
+        "Batch mode repeats this for every file and bundles the reports into a ZIP. "
+        "3D mode stacks per-slice masks into a volume and meshes it with marching cubes."
+    )
+
+with about_model:
+
+    st.write("")
+
+    ui.spec_grid([
+        ("Classifier", "EfficientNet-B0"),
+        ("Transfer learning", "Enabled" if classifier.config.PRETRAINED else "Disabled"),
+        ("Classes", f"{classifier.config.NUM_CLASSES}"),
+        ("Classifier input", "224 × 224"),
+        ("Segmentation", "U-Net"),
+        ("Framework", "PyTorch"),
+        ("Classification device", str(classifier.config.DEVICE).upper()),
+        ("Segmentation device", str(seg_config.DEVICE).upper()),
+        ("Training data", "~5,000 brain MRI images"),
+    ])
+
+with about_disclaimer:
+
+    st.write("")
+
+    ui.callout(
+        "Not a medical device",
+        "NeuroScan is a research prototype. It is <b>not</b> intended to replace "
+        "professional medical diagnosis or the opinion of a qualified radiologist "
+        "or physician. Always consult a qualified medical professional before "
+        "making clinical decisions.",
+        kind="warning",
+        icon="!",
+    )
 
 
 # PAGE FOOTER
 
 
-st.markdown("---")
-
-
-st.markdown(
-
-    """
-<div class="footer">
-
-<b>NeuroScan</b><br>
-
-AI-Powered Brain Tumor Classification,
-Segmentation & Explainability<br><br>
-
-Developed using
-
-<b>PyTorch</b>,
-
-<b>EfficientNet-B0</b>,
-
-<b>U-Net</b>,
-
-<b>Streamlit</b>,
-
-and
-
-<b>Grad-CAM</b>.
-
-</div>
-""",
-
-    unsafe_allow_html=True
-
-)
+ui.footer()
