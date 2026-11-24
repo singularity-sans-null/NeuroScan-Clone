@@ -45,6 +45,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from pdf_report import create_pdf_report
 import ui
+from model_store import resolve_model_path
 
 import classifier.config
 from classifier.dataset import get_transforms
@@ -274,8 +275,10 @@ def load_classification_model():
     model = load_checkpoint(
         model,
 
-        classifier.config.MODEL_SAVE_DIR /
-        classifier.config.BEST_MODEL_NAME
+        resolve_model_path(
+            classifier.config.MODEL_SAVE_DIR,
+            classifier.config.BEST_MODEL_NAME,
+        )
     )
 
     model.eval()
@@ -296,8 +299,10 @@ def load_segmentation_model():
     model = load_unet_model(
         model,
 
-        seg_config.MODEL_SAVE_DIR /
-        seg_config.BEST_MODEL_NAME
+        resolve_model_path(
+            seg_config.MODEL_SAVE_DIR,
+            seg_config.BEST_MODEL_NAME,
+        )
     )
 
     model.eval()
@@ -898,35 +903,108 @@ if processing_mode == MODE_SINGLE:
 
             ui.card_title("Patient details", "Required")
 
+            extract_from_filename = st.toggle(
+                "Extract details from filename",
+                key="single_extract_from_filename",
+                help=(
+                    "Read Patient ID, Age and Sex from the uploaded file's "
+                    "name, using the format PATIENTID_AGE_SEX "
+                    "(e.g. NS001_24_Male.png)."
+                ),
+            )
+
+            # The uploader is rendered later in the script, but its current
+            # value is already available in session state via its key.
+            pending_upload = st.session_state.get("single_upload")
+
+            parsed_id = parsed_age = parsed_sex = None
+            filename_error = None
+
+            if extract_from_filename and pending_upload is not None:
+                try:
+                    parsed_id, parsed_age, parsed_sex = parse_patient_filename(
+                        pending_upload.name
+                    )
+                except ValueError as error:
+                    filename_error = str(error)
+
             patient_col1, patient_col2 = st.columns(2)
 
             with patient_col1:
 
-                patient_id = st.text_input(
-                    "Patient ID",
-                    placeholder="e.g. NS-00142",
-                )
+                if extract_from_filename:
+                    patient_id = st.text_input(
+                        "Patient ID",
+                        value=parsed_id or "",
+                        placeholder="From filename",
+                        disabled=True,
+                    )
 
-                patient_age = st.number_input(
-                    "Age",
-                    min_value=0,
-                    max_value=120,
-                    value=None,
-                    placeholder="Years",
-                )
+                    patient_age = st.number_input(
+                        "Age",
+                        min_value=0,
+                        max_value=120,
+                        value=parsed_age,
+                        placeholder="From filename",
+                        disabled=True,
+                    )
+                else:
+                    patient_id = st.text_input(
+                        "Patient ID",
+                        placeholder="e.g. NS-00142",
+                    )
+
+                    patient_age = st.number_input(
+                        "Age",
+                        min_value=0,
+                        max_value=120,
+                        value=None,
+                        placeholder="Years",
+                    )
 
             with patient_col2:
 
-                patient_sex = st.selectbox(
-                    "Sex",
-                    options=["Male", "Female"],
-                    index=None,
-                    placeholder="Select",
-                )
+                sex_options = ["Male", "Female"]
+
+                if extract_from_filename:
+                    patient_sex = st.selectbox(
+                        "Sex",
+                        options=sex_options,
+                        index=(
+                            sex_options.index(parsed_sex)
+                            if parsed_sex in sex_options
+                            else None
+                        ),
+                        placeholder="From filename",
+                        disabled=True,
+                    )
+                else:
+                    patient_sex = st.selectbox(
+                        "Sex",
+                        options=sex_options,
+                        index=None,
+                        placeholder="Select",
+                    )
 
                 report_date = st.date_input(
                     "Scan date"
                 )
+
+            if extract_from_filename:
+                if filename_error:
+                    ui.callout(
+                        "Couldn't read the filename",
+                        f"{filename_error} Rename the file to "
+                        "<b>PATIENTID_AGE_SEX</b> (e.g. NS001_24_Male.png) "
+                        "or turn off extraction to enter details manually.",
+                        kind="danger",
+                        icon="!",
+                    )
+                elif pending_upload is None:
+                    st.caption(
+                        "Upload a scan named PATIENTID_AGE_SEX "
+                        "(e.g. NS001_24_Male.png) to fill these fields."
+                    )
 
     with intake_right:
         with st.container(border=True):
@@ -937,6 +1015,7 @@ if processing_mode == MODE_SINGLE:
                 "Brain MRI image",
                 type=["jpg", "jpeg", "png"],
                 label_visibility="collapsed",
+                key="single_upload",
             )
 
             preview_image = None
@@ -1369,13 +1448,28 @@ elif processing_mode == MODE_VOLUME:
 
             ui.card_title("MRI slice sequence", "Multiple files")
 
+            # Streamlit can't clear a file_uploader directly, so "Remove all"
+            # gives it a fresh key, which mounts a new, empty uploader.
+            st.session_state.setdefault("3d_upload_version", 0)
+
+            def clear_3d_uploads():
+                st.session_state["3d_upload_version"] += 1
+
             uploaded_slices = st.file_uploader(
                 "MRI sequence",
                 type=["jpg", "jpeg", "png"],
                 accept_multiple_files=True,
-                key="3d_upload",
+                key=f"3d_upload_{st.session_state['3d_upload_version']}",
                 label_visibility="collapsed",
             )
+
+            if uploaded_slices:
+                st.button(
+                    f"Remove all {len(uploaded_slices)} images",
+                    icon=":material/delete_sweep:",
+                    on_click=clear_3d_uploads,
+                    width="stretch",
+                )
 
     with settings_col:
         with st.container(border=True):

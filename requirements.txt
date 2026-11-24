@@ -35,3 +35,5 @@ requests
 # 3D Visualization (volumetric processing)
 plotly>=5.0.0
 scikit-image>=0.22.0
+# Model weights download (hosted deployment)
+huggingface_hub

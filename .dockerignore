@@ -1,0 +1,12 @@
+venv/
+.git/
+**/__pycache__/
+saved_models/*.pth
+dataset/
+seg_dataset/
+outputs/
+IMAGES/
+assets/demo/
+documentation/
+docs/
+test.py

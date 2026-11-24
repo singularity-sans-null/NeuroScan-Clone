@@ -1,0 +1,26 @@
+# Runtime dependencies for the hosted app (Streamlit Community Cloud or the
+# Dockerfile). Streamlit Cloud reads this file because it sits next to app.py.
+# The root requirements.txt stays the full local/training environment.
+
+# CPU-only PyTorch: far smaller than the default CUDA build. The "+cpu"
+# versions exist only on the PyTorch index, which forces pip to use it.
+--extra-index-url https://download.pytorch.org/whl/cpu
+torch==2.14.1+cpu
+torchvision==0.29.1+cpu
+
+streamlit==1.67.0
+huggingface_hub
+
+opencv-python-headless==5.0.0.93
+Pillow==13.0.0
+numpy==2.5.4
+scipy==1.18.1
+scikit-learn==1.9.1
+scikit-image==0.26.0
+albumentations==2.0.8
+grad-cam==1.5.7
+matplotlib==3.11.2
+plotly==7.1.0
+reportlab==5.1.0
+requests==2.34.2
+tqdm==4.70.1
