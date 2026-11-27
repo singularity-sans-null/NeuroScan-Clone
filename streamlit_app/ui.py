@@ -561,7 +561,7 @@ def footer():
 
 # PLOTLY THEME
 
-def style_3d_figure(fig, height=640):
+def style_3d_figure(fig, height=640, show_axes=True):
     # Neutral, semi-transparent grays read on both light and dark backgrounds.
     # Text colors are left unset so Streamlit's plotly theme supplies the
     # active theme's text color.
@@ -573,6 +573,8 @@ def style_3d_figure(fig, height=640):
         showbackground=True,
         title_font=dict(size=11),
         tickfont=dict(size=10),
+        visible=show_axes,
+        showspikes=False,
     )
     fig.update_layout(
         scene=dict(
@@ -581,8 +583,14 @@ def style_3d_figure(fig, height=640):
             zaxis=dict(axis, title="Z (slice depth)"),
             aspectmode="data",
             bgcolor="rgba(0,0,0,0)",
-            camera=dict(eye=dict(x=1.25, y=1.1, z=0.75)),
+            # Slightly elevated three-quarter view, superior (Z) pointing up.
+            camera=dict(
+                eye=dict(x=1.35, y=-1.35, z=0.9),
+                up=dict(x=0, y=0, z=1),
+            ),
+            dragmode="turntable",
         ),
+        uirevision="ns-3d",
         paper_bgcolor="rgba(0,0,0,0)",
         plot_bgcolor="rgba(0,0,0,0)",
         margin=dict(l=0, r=0, b=0, t=10),

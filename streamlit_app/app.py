@@ -29,8 +29,6 @@ from datetime import date
 import cv2
 import numpy as np
 import re
-import plotly.graph_objects as go
-from skimage.measure import marching_cubes
 import torch
 import streamlit as st
 
@@ -45,6 +43,7 @@ sys.path.insert(0, str(PROJECT_ROOT))
 
 from pdf_report import create_pdf_report
 import ui
+import volume3d
 from model_store import resolve_model_path
 
 import classifier.config
@@ -657,6 +656,65 @@ def analyze_mri(
 
 
 
+# FAST BATCHED INFERENCE (3D MODE)
+
+
+@torch.inference_mode()
+def predict_slices_batch(images, batch_size=8):
+    """
+    Classification and segmentation for many slices at once.
+
+    Unlike analyze_mri, this skips Grad-CAM (which needs a backward pass)
+    and does not write images to disk. That makes it much faster for
+    volumetric reconstruction, where neither is used.
+
+    Returns a list of dicts with prediction_name, confidence,
+    probabilities, tumor_prob (sigmoid map), tumor_pixels, total_pixels.
+    """
+    results = []
+
+    for start in range(0, len(images), batch_size):
+        chunk = images[start:start + batch_size]
+
+        cls_batch = torch.stack(
+            [classification_transform(img) for img in chunk]
+        ).to(classifier.config.DEVICE)
+
+        seg_batch = torch.stack(
+            [segmentation_transform(image=np.array(img))["image"] for img in chunk]
+        ).to(seg_config.DEVICE)
+
+        probabilities = torch.softmax(classification_model(cls_batch), dim=1)
+        seg_probs = torch.sigmoid(segmentation_model(seg_batch))[:, 0]
+
+        probabilities = probabilities.cpu().numpy()
+        seg_probs = seg_probs.float().cpu().numpy()
+
+        for probs, tumor_prob in zip(probabilities, seg_probs):
+            index = int(np.argmax(probs))
+            tumor_pixels = int(np.count_nonzero(tumor_prob > 0.5))
+            results.append({
+                "prediction_name": classifier.config.CLASS_NAMES[index],
+                "prediction_index": index,
+                "confidence": float(probs[index]),
+                "probabilities": probs,
+                "tumor_prob": tumor_prob,
+                "tumor_pixels": tumor_pixels,
+                "total_pixels": int(tumor_prob.size),
+            })
+
+    return results
+
+
+@st.cache_data(show_spinner=False, max_entries=8)
+def build_3d_meshes(brain_stack, tumor_stack, slice_spacing, quality, smoothness):
+    """Cached mesh reconstruction so viewer tweaks don't recompute meshes."""
+    return volume3d.reconstruct(
+        brain_stack, tumor_stack,
+        slice_spacing=slice_spacing, quality=quality, smoothness=smoothness,
+    )
+
+
 # UI SETUP
 
 
@@ -888,7 +946,39 @@ def render_single_report(data):
             )
 
 
+def reset_scan_state(result_keys, version_key):
+    """
+    Drop stored results and bump the form version. Widgets keyed with the
+    version (uploaders, patient fields) remount empty on the next run,
+    since Streamlit can't clear a file_uploader directly.
+    """
+
+    for key in result_keys:
+        st.session_state.pop(key, None)
+
+    st.session_state[version_key] = st.session_state.get(version_key, 0) + 1
+
+
+def new_scan_button(label, result_keys, version_key, key):
+    """
+    Full-width button that clears the current results and inputs.
+    """
+
+    st.write("")
+    st.button(
+        label,
+        icon=":material/restart_alt:",
+        on_click=reset_scan_state,
+        args=(result_keys, version_key),
+        key=key,
+        width="stretch",
+    )
+
+
 if processing_mode == MODE_SINGLE:
+
+    st.session_state.setdefault("single_form_version", 0)
+    single_version = st.session_state["single_form_version"]
 
     ui.section_header(
         "01",
@@ -915,7 +1005,7 @@ if processing_mode == MODE_SINGLE:
 
             # The uploader is rendered later in the script, but its current
             # value is already available in session state via its key.
-            pending_upload = st.session_state.get("single_upload")
+            pending_upload = st.session_state.get(f"single_upload_{single_version}")
 
             parsed_id = parsed_age = parsed_sex = None
             filename_error = None
@@ -952,6 +1042,7 @@ if processing_mode == MODE_SINGLE:
                     patient_id = st.text_input(
                         "Patient ID",
                         placeholder="e.g. NS-00142",
+                        key=f"single_patient_id_{single_version}",
                     )
 
                     patient_age = st.number_input(
@@ -960,6 +1051,7 @@ if processing_mode == MODE_SINGLE:
                         max_value=120,
                         value=None,
                         placeholder="Years",
+                        key=f"single_patient_age_{single_version}",
                     )
 
             with patient_col2:
@@ -984,10 +1076,12 @@ if processing_mode == MODE_SINGLE:
                         options=sex_options,
                         index=None,
                         placeholder="Select",
+                        key=f"single_patient_sex_{single_version}",
                     )
 
                 report_date = st.date_input(
-                    "Scan date"
+                    "Scan date",
+                    key=f"single_scan_date_{single_version}",
                 )
 
             if extract_from_filename:
@@ -1015,7 +1109,7 @@ if processing_mode == MODE_SINGLE:
                 "Brain MRI image",
                 type=["jpg", "jpeg", "png"],
                 label_visibility="collapsed",
-                key="single_upload",
+                key=f"single_upload_{single_version}",
             )
 
             preview_image = None
@@ -1122,6 +1216,13 @@ if processing_mode == MODE_SINGLE:
 
         render_single_report(st.session_state["single_report"])
 
+        new_scan_button(
+            "Clear results & start a new scan",
+            ["single_report"],
+            "single_form_version",
+            key="single_new_scan",
+        )
+
     else:
 
         st.write("")
@@ -1169,11 +1270,13 @@ elif processing_mode == MODE_BATCH:
 
             ui.card_title("MRI scans", "Multiple files")
 
+            st.session_state.setdefault("batch_upload_version", 0)
+
             uploaded_files = st.file_uploader(
                 "MRI images",
                 type=["jpg", "jpeg", "png"],
                 accept_multiple_files=True,
-                key="batch_upload",
+                key=f"batch_upload_{st.session_state['batch_upload_version']}",
                 label_visibility="collapsed",
             )
 
@@ -1428,6 +1531,13 @@ elif processing_mode == MODE_BATCH:
                 width="stretch",
             )
 
+        new_scan_button(
+            "Clear results & start a new batch",
+            ["batch_zip", "batch_successful_reports", "batch_failed_reports"],
+            "batch_upload_version",
+            key="batch_new_scan",
+        )
+
 
 # 3D VOLUMETRIC PROCESSING MODE
 
@@ -1438,7 +1548,7 @@ elif processing_mode == MODE_VOLUME:
         "01",
         "Volume intake",
         "Upload an ordered sequence of MRI slices from one patient to reconstruct "
-        "the tumor in 3D inside a translucent cranial envelope.",
+        "the tumor in 3D inside a translucent brain envelope.",
     )
 
     upload_col, settings_col = st.columns([1.3, 1], gap="large")
@@ -1474,20 +1584,14 @@ elif processing_mode == MODE_VOLUME:
     with settings_col:
         with st.container(border=True):
 
-            ui.card_title("Reconstruction settings")
-
-            z_aspect = st.slider(
-                "Slice depth spacing (Z multiplier)",
-                min_value=1.0,
-                max_value=6.0,
-                value=3.0,
-                step=0.5,
-                help="Adjusts spacing between slices so the volume isn't flattened.",
-            )
+            ui.card_title("How reconstruction works")
 
             st.caption(
-                "Slices are ordered naturally by filename "
-                "(slice_2 before slice_10)."
+                "Slices are ordered naturally by filename (slice_2 before slice_10), "
+                "then classified and segmented in batches. Masks are interpolated "
+                "between slices, so the 3D surface stays smooth instead of stepped. "
+                "Depth spacing, quality and display options can be changed after "
+                "analysis without re-running the models."
             )
 
     if uploaded_slices:
@@ -1512,16 +1616,11 @@ elif processing_mode == MODE_VOLUME:
             width="stretch",
         ):
 
-            tumor_masks_2d = []
-            brain_outline_masks_2d = []
-            slice_diagnostic_records = []
-
-            pertinent_count = 0
-            sum_probabilities = np.zeros(len(CLASS_NAMES))
-            sum_confidence = 0.0
-            volume_tumor_pixels = 0
-            volume_total_pixels = 0
+            images = []
+            slice_results = []
+            prepared = []
             processing_failed = False
+            batch_size = 16 if seg_config.DEVICE.type == "cuda" else 8
 
             with st.status(
                 f"Analyzing {len(uploaded_slices)} slices...",
@@ -1531,71 +1630,51 @@ elif processing_mode == MODE_VOLUME:
                 progress_bar = st.progress(0.0)
                 status_text = st.empty()
 
-                for index, slice_file in enumerate(uploaded_slices):
+                # LOAD
 
-                    status_text.caption(
-                        f"Slice {index + 1} of {len(uploaded_slices)} · {slice_file.name}"
-                    )
-
+                for slice_file in uploaded_slices:
                     try:
-
-                        image = Image.open(slice_file).convert("RGB")
-                        image_np = np.array(image)
-
-                        results = analyze_mri(
-                            image=image,
-                            patient_id="3D_Temp",
-                            alpha=0.5,
-                        )
-
-                        pred_name = results["prediction_name"]
-                        conf = results["confidence"]
-                        t_pixels = results["tumor_pixels"]
-
-                        slice_diagnostic_records.append({
-                            "Filename": slice_file.name,
-                            "Prediction": display_class(pred_name),
-                            "Confidence": conf,
-                            "Tumor Pixels": t_pixels,
-                            "Probabilities": results["probabilities"],
-                        })
-
-                        if is_tumor_class(pred_name):
-                            pertinent_count += 1
-                            sum_probabilities += results["probabilities"]
-                            sum_confidence += conf
-
-                        volume_tumor_pixels += t_pixels
-                        volume_total_pixels += results["total_pixels"]
-
-                        mask = results["predicted_mask"]
-                        tumor_masks_2d.append((mask > 0).astype(np.uint8))
-
-                        # Outer brain boundary for the cranial envelope
-                        gray = cv2.cvtColor(image_np, cv2.COLOR_RGB2GRAY)
-                        _, thresh = cv2.threshold(gray, 15, 255, cv2.THRESH_BINARY)
-                        contours, _ = cv2.findContours(
-                            thresh, cv2.RETR_EXTERNAL, cv2.CHAIN_APPROX_SIMPLE
-                        )
-                        outline_mask = np.zeros_like(gray, dtype=np.uint8)
-                        if contours:
-                            cv2.drawContours(outline_mask, contours, -1, color=1, thickness=2)
-                        brain_outline_masks_2d.append(outline_mask)
-
+                        images.append(Image.open(slice_file).convert("RGB"))
                     except Exception as error:
-
                         status.update(
                             label=f"Failed on {slice_file.name}",
                             state="error",
                             expanded=True,
                         )
-                        st.error(f"Error processing {slice_file.name}: {error}")
+                        st.error(f"Could not read {slice_file.name}: {error}")
                         processing_failed = True
                         break
 
-                    progress_bar.progress((index + 1) / len(uploaded_slices))
+                # INFER (batched, no Grad-CAM, no disk writes)
 
                 if not processing_failed:
+                    try:
+                        for start in range(0, len(images), batch_size):
+                            end = min(start + batch_size, len(images))
+                            status_text.caption(
+                                f"Slices {start + 1}–{end} of {len(images)}"
+                            )
+                            slice_results.extend(
+                                predict_slices_batch(images[start:end], batch_size)
+                            )
+                            progress_bar.progress(end / len(images))
+                    except Exception as error:
+                        status.update(
+                            label="Model inference failed",
+                            state="error",
+                            expanded=True,
+                        )
+                        st.error(f"Error during analysis: {error}")
+                        processing_failed = True
+
+                # PREPARE 3D STACKS ON ONE SHARED GRID
+
+                if not processing_failed:
+                    status_text.caption("Preparing volume...")
+                    prepared = [
+                        volume3d.prepare_slice(np.array(img), res["tumor_prob"])
+                        for img, res in zip(images, slice_results)
+                    ]
                     status_text.empty()
                     status.update(
                         label=f"Analyzed {len(uploaded_slices)} slices",
@@ -1607,6 +1686,28 @@ elif processing_mode == MODE_VOLUME:
                 st.stop()
 
             # AGGREGATE PREDICTION
+
+            slice_diagnostic_records = []
+            pertinent_count = 0
+            sum_probabilities = np.zeros(len(CLASS_NAMES))
+            sum_confidence = 0.0
+            volume_tumor_pixels = 0
+            volume_total_pixels = 0
+
+            for slice_file, res in zip(uploaded_slices, slice_results):
+                slice_diagnostic_records.append({
+                    "Filename": slice_file.name,
+                    "Prediction": display_class(res["prediction_name"]),
+                    "Confidence": res["confidence"],
+                    "Tumor Pixels": res["tumor_pixels"],
+                    "Probabilities": res["probabilities"],
+                })
+                if is_tumor_class(res["prediction_name"]):
+                    pertinent_count += 1
+                    sum_probabilities += res["probabilities"]
+                    sum_confidence += res["confidence"]
+                volume_tumor_pixels += res["tumor_pixels"]
+                volume_total_pixels += res["total_pixels"]
 
             if pertinent_count > 0:
                 avg_probabilities = sum_probabilities / pertinent_count
@@ -1650,53 +1751,8 @@ elif processing_mode == MODE_VOLUME:
                 for idx, r in enumerate(ranked_scans)
             ]
 
-            # 3D MESHES
-
-            tumor_volume_3d = np.stack(tumor_masks_2d, axis=0)
-            brain_outline_3d = np.stack(brain_outline_masks_2d, axis=0)
-
-            fig = go.Figure()
-            mesh_error = None
-
-            if np.max(brain_outline_3d) > 0:
-                try:
-                    b_verts, b_faces, _, _ = marching_cubes(
-                        brain_outline_3d,
-                        level=0.5,
-                        spacing=(z_aspect, 1.0, 1.0),
-                    )
-                    fig.add_trace(go.Mesh3d(
-                        x=b_verts[:, 2], y=b_verts[:, 1], z=b_verts[:, 0],
-                        i=b_faces[:, 0], j=b_faces[:, 1], k=b_faces[:, 2],
-                        color="#94A3B8",
-                        opacity=0.12,
-                        name="Cranial boundary",
-                        showlegend=True,
-                        hoverinfo="skip",
-                    ))
-                except Exception:
-                    pass
-
-            if np.max(tumor_volume_3d) > 0:
-                try:
-                    t_verts, t_faces, _, _ = marching_cubes(
-                        tumor_volume_3d,
-                        level=0.5,
-                        spacing=(z_aspect, 1.0, 1.0),
-                    )
-                    fig.add_trace(go.Mesh3d(
-                        x=t_verts[:, 2], y=t_verts[:, 1], z=t_verts[:, 0],
-                        i=t_faces[:, 0], j=t_faces[:, 1], k=t_faces[:, 2],
-                        color="#EF4444",
-                        opacity=0.9,
-                        name="Tumor mass",
-                        showlegend=True,
-                        lighting=dict(ambient=0.45, diffuse=0.8, specular=0.35, roughness=0.5),
-                        lightposition=dict(x=100, y=200, z=150),
-                    ))
-                except Exception as error:
-                    mesh_error = str(error)
-
+            # Only the compact uint8/bool stacks are kept. The meshes are built
+            # (and cached) at render time, so viewer settings apply instantly.
             st.session_state["volume_report"] = {
                 "best_class": best_tumor_class,
                 "avg_confidence": avg_confidence,
@@ -1707,8 +1763,9 @@ elif processing_mode == MODE_VOLUME:
                 "tumor_voxels": volume_tumor_pixels,
                 "total_voxels": volume_total_pixels,
                 "ranking": ranking_table_data,
-                "figure": ui.style_3d_figure(fig) if len(fig.data) > 0 else None,
-                "mesh_error": mesh_error,
+                "gray_stack": np.stack([p[0] for p in prepared]),
+                "brain_stack": np.stack([p[1] for p in prepared]),
+                "tumor_stack": np.stack([p[2] for p in prepared]),
             }
 
     elif "volume_report" not in st.session_state:
@@ -1749,22 +1806,158 @@ elif processing_mode == MODE_VOLUME:
                 kind="success",
             )
 
-        ui.stat_cards([
+        ui.section_header(
+            "03",
+            "3D reconstruction",
+            "Drag to rotate, scroll to zoom, click legend items to toggle layers.",
+        )
+
+        viewer_col, controls_col = st.columns([3, 1], gap="large")
+
+        with controls_col:
+            with st.container(border=True):
+
+                ui.card_title("Viewer")
+
+                estimated_spacing = volume3d.estimate_slice_spacing(
+                    report["brain_stack"]
+                )
+                auto_depth = st.toggle(
+                    "Auto depth",
+                    value=estimated_spacing is not None,
+                    disabled=estimated_spacing is None,
+                    help="Estimates slice spacing from how the head's cross-section "
+                         "narrows through the sequence, so the model keeps natural "
+                         "proportions. Unavailable when the sequence is too short.",
+                )
+                if auto_depth and estimated_spacing is not None:
+                    slice_spacing = round(estimated_spacing * 2) / 2
+                    st.caption(f"Estimated slice spacing: {slice_spacing:.1f}")
+                else:
+                    slice_spacing = st.slider(
+                        "Slice depth spacing",
+                        min_value=1.0,
+                        max_value=12.0,
+                        value=volume3d.DEFAULT_SLICE_SPACING,
+                        step=0.5,
+                        help="Distance between slices relative to in-plane pixels. "
+                             "Raise it if the volume looks flattened.",
+                    )
+
+                quality = st.segmented_control(
+                    "Mesh quality",
+                    options=list(volume3d.QUALITY_PRESETS),
+                    default="Balanced",
+                    help="Higher quality uses a finer grid and more triangles.",
+                ) or "Balanced"
+
+                smoothness = st.slider(
+                    "Surface smoothing",
+                    min_value=0,
+                    max_value=30,
+                    value=12,
+                    help="Taubin smoothing iterations. Removes voxel ripples "
+                         "without shrinking the mesh.",
+                )
+
+                show_brain = st.toggle("Brain envelope", value=True)
+                show_plane = st.toggle("MRI slice plane", value=True)
+                show_axes = st.toggle("Axes", value=False)
+
+                slice_count = report["slice_count"]
+                default_slice = volume3d.best_slice_index(
+                    report["tumor_stack"], report["brain_stack"]
+                )
+                plane_index = default_slice
+                if show_plane and slice_count > 1:
+                    plane_index = st.slider(
+                        "Slice plane position",
+                        min_value=1,
+                        max_value=slice_count,
+                        value=default_slice + 1,
+                        help="Defaults to the slice with the largest tumor area.",
+                    ) - 1
+
+        with st.spinner("Building 3D meshes..."):
+            recon = build_3d_meshes(
+                report["brain_stack"],
+                report["tumor_stack"],
+                slice_spacing,
+                quality,
+                smoothness,
+            )
+
+        with viewer_col:
+            with st.container(border=True):
+
+                if recon["brain"] is None and recon["tumor"] is None:
+                    ui.empty_state(
+                        "Nothing to reconstruct",
+                        "No structures were detected in the uploaded slices.",
+                    )
+                else:
+                    fig = volume3d.build_figure(
+                        recon,
+                        gray_stack=report["gray_stack"],
+                        brain_stack=report["brain_stack"],
+                        show_brain=show_brain,
+                        slice_index=plane_index if show_plane else None,
+                    )
+                    st.plotly_chart(
+                        ui.style_3d_figure(fig, show_axes=show_axes),
+                        width="stretch",
+                        theme="streamlit",
+                        config={"displaylogo": False},
+                    )
+
+                    faces = sum(
+                        m.n_faces for m in (recon["brain"], recon["tumor"]) if m is not None
+                    )
+                    st.caption(
+                        f"{faces:,} triangles · {recon['grid']}×{recon['grid']} grid · "
+                        f"built in {recon['seconds']:.2f}s"
+                    )
+
+        tumor_mesh = recon["tumor"]
+
+        if tumor_mesh is not None:
+            first, last = tumor_mesh.stats["slice_range"]
+            multi = last > first
+            mass_cards = [
+                {
+                    "label": "Tumor volume",
+                    "value": f"{tumor_mesh.stats['volume_px3']:,.0f}",
+                    "sub": "px³ on the 224-px grid, from the mesh",
+                    "accent": ui.COLORS["danger"],
+                },
+                {
+                    "label": "Tumor extent",
+                    "value": f"{first + 1}–{last + 1}" if multi else f"{first + 1}",
+                    "sub": "Slices containing the mass" if multi else "Slice containing the mass",
+                    "accent": ui.COLORS["teal"],
+                },
+                {
+                    "label": "Separate masses",
+                    "value": f"{recon['components']}",
+                    "sub": "After removing noise specks",
+                },
+            ]
+        else:
+            mass_cards = [
+                {
+                    "label": "Tumor volume",
+                    "value": "0",
+                    "sub": "No tumor surface reconstructed",
+                    "accent": ui.COLORS["muted"],
+                },
+            ]
+
+        ui.stat_cards(mass_cards + [
             {
                 "label": "Tumor area",
                 "value": f"{report['tumor_pct']:.2f}%",
-                "sub": "Across the whole volume",
+                "sub": f"{report['tumor_voxels']:,} of {report['total_voxels']:,} px",
                 "accent": ui.COLORS["danger"],
-            },
-            {
-                "label": "Tumor voxels",
-                "value": f"{report['tumor_voxels']:,}",
-                "accent": ui.COLORS["teal"],
-            },
-            {
-                "label": "Total voxels",
-                "value": f"{report['total_voxels']:,}",
-                "accent": ui.COLORS["muted"],
             },
             {
                 "label": "Slices",
@@ -1772,30 +1965,6 @@ elif processing_mode == MODE_VOLUME:
                 "sub": "With tumor pattern",
             },
         ])
-
-        ui.section_header(
-            "03",
-            "3D reconstruction",
-            "Drag to rotate, scroll to zoom. Red marks the predicted tumor mass.",
-        )
-
-        with st.container(border=True):
-
-            if report["figure"] is not None:
-                st.plotly_chart(
-                    report["figure"],
-                    width="stretch",
-                    theme="streamlit",
-                    config={"displaylogo": False},
-                )
-            else:
-                ui.empty_state(
-                    "Nothing to reconstruct",
-                    "No structures were detected in the uploaded slices.",
-                )
-
-            if report["mesh_error"]:
-                st.caption(f"Tumor mesh could not be built: {report['mesh_error']}")
 
         ui.section_header(
             "04",
@@ -1838,6 +2007,13 @@ elif processing_mode == MODE_VOLUME:
                     },
                 )
 
+        new_scan_button(
+            "Clear results & start a new volume",
+            ["volume_report"],
+            "3d_upload_version",
+            key="volume_new_scan",
+        )
+
 
 # ABOUT NEURO SCAN
 
@@ -1868,7 +2044,8 @@ with about_pipeline:
 
     st.caption(
         "Batch mode repeats this for every file and bundles the reports into a ZIP. "
-        "3D mode stacks per-slice masks into a volume and meshes it with marching cubes."
+        "3D mode batches slices through both models, interpolates the masks between "
+        "slices and meshes them into smooth surfaces with marching cubes."
     )
 
 with about_model:
